@@ -6,7 +6,6 @@ package packager2
 import (
 	"context"
 	"fmt"
-
 	"oras.land/oras-go/v2/registry"
 )
 
@@ -19,31 +18,16 @@ type PublishOpts struct {
 	SkipSignatureValidation bool
 }
 
-func NewPublishOpts(path string, registry registry.Reference, skeleton bool, signingKeyPath string, signingKeyPassword string, skipSignatureValidation bool) (PublishOpts, error) {
-
-	if err := registry.ValidateRegistry(); err != nil {
-		return PublishOpts{}, fmt.Errorf("invalid registry: %w", err)
-	}
-
-	if path == "" {
-		return PublishOpts{}, fmt.Errorf("path must be specified")
-	}
-
-	opts := PublishOpts{
-		Path:                    path,
-		Registry:                registry,
-		IsSkeleton:              skeleton,
-		SigningKeyPath:          signingKeyPath,
-		SigningKeyPassword:      signingKeyPassword,
-		SkipSignatureValidation: skipSignatureValidation,
-	}
-
-	return opts, nil
-}
-
 // Takes directory/tar file & OCI Registry
 
 // TODO Dir points to a location on disk and registry is a URL.
 func Publish(ctx context.Context, opts PublishOpts) error {
+	if err := opts.Registry.ValidateRegistry(); err != nil {
+		return fmt.Errorf("invalid registry: %w", err)
+	}
+
+	if opts.Path == "" {
+		return fmt.Errorf("path must be specified")
+	}
 	return nil
 }

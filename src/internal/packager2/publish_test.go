@@ -10,7 +10,6 @@ import (
 )
 
 func TestPublish(t *testing.T) {
-
 	ctx := context.Background()
 
 	// TODO add freeport
@@ -21,29 +20,47 @@ func TestPublish(t *testing.T) {
 	}
 
 	tt := []struct {
-		name string
-		opts PublishOpts
+		name   string
+		opts   PublishOpts
+		expect bool
 	}{
 		{
-			name: "publish skeleton package",
+			name:   "Test empty publishopts",
+			opts:   PublishOpts{},
+			expect: true,
+		},
+		{
+			name: "Test empty path",
 			opts: PublishOpts{
-				Path:     "testdata/skeleton",
+				Path:     "",
 				Registry: ref,
 			},
+			expect: true,
 		},
 		// {
-		// 	name:     "simple",
-		// 	dir:      "testdata/simple",
-		// 	registry: "",
-		// 	opts:     PublishOpts{},
+		// 	name: "publish skeleton package",
+		// 	opts: PublishOpts{
+		// 		Path:                    "testdata/skeleton",
+		// 		Registry:                ref,
+		// 	},
+		// 	expect: "",
 		// },
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			// TODO Make parallel
+			// t.Parallel()
 			err := Publish(context.Background(), tc.opts)
-			require.NoError(t, err)
+			if tc.expect {
+				require.Error(t, err)
+			}
+
+			// TODO: Read manifest from registry
+
+			// TODO: check sha of the resulting publish
+			// err := oras.PackManifest()
+			// require.NoError(t, err)
 		})
 	}
 }
