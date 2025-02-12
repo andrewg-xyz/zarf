@@ -9,26 +9,29 @@ import (
 func TestPublish(t *testing.T) {
 
 	tt := []struct {
-		name string
-		dir  string
-		opts PublishOpts
+		name     string
+		dir      string
+		registry string
+		opts     PublishOpts
 	}{
 		{
-			name: "simple",
-			dir:  "testdata/simple",
-			opts: PublishOpts{},
+			name:     "simple",
+			dir:      "testdata/simple",
+			registry: "",
+			opts:     PublishOpts{},
 		},
 		{
-			name: "simple",
-			dir:  "testdata/simple",
-			opts: PublishOpts{},
+			name:     "simple",
+			dir:      "testdata/simple",
+			registry: "",
+			opts:     PublishOpts{},
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			err := Publish(context.Background(), tc.opts)
+			err := Publish(context.Background(), tc.dir, tc.registry, tc.opts)
 			require.NoError(t, err)
 		})
 	}
