@@ -11,6 +11,9 @@ type PublishOpts struct {
 	SkipSignatureValidation bool
 }
 
-func Publish(ctx context.Context, opts PublishOpts) error {
+// Takes directory/tar file & OCI Registry
+
+// TODO Dir points to a location on disk and registry is a URL.
+func Publish(ctx context.Context, dir string, registry string, opts PublishOpts) error {
 	return nil
 }
