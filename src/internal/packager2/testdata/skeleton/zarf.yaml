@@ -7,6 +7,3 @@ metadata:
 components:
   - name: on-deploy-with-template-use-of-variable
     required: true
-    files:
-      - source: test.txt
-        target: test.txt
