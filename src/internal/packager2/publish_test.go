@@ -85,35 +85,30 @@ func TestPublish(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// TODO Make parallel
 			// t.Parallel()
+
+			// Publish test package
 			err := Publish(context.Background(), tc.opts)
 			require.NoError(t, err)
 
-			// fmt.Println("efr"tc.opts.Registry.Reference)
+			// Read and unmarshall expected
 			data, err := os.ReadFile(filepath.Join(tc.opts.Path, layout.ZarfYAML))
 			require.NoError(t, err)
-
 			var expectedPkg v1alpha1.ZarfPackage
-			goyaml.Unmarshal(data, &expectedPkg)
-
-			format := "%s/%s:%s"
-			artifactURL := fmt.Sprintf(format, registryURL, expectedPkg.Metadata.Name, expectedPkg.Metadata.Version)
-
-			fmt.Println("this is the artifact url", artifactURL)
-			ref, err := registry.ParseReference(artifactURL)
+			err = goyaml.Unmarshal(data, &expectedPkg)
 			require.NoError(t, err)
 
-			registry.ParseReference(artifactURL)
+			// Format url and instantiate remote
+			format := "%s/%s:%s"
+			artifactURL := fmt.Sprintf(format, registryURL, expectedPkg.Metadata.Name, expectedPkg.Metadata.Version)
+			ref, err := registry.ParseReference(artifactURL)
+			require.NoError(t, err)
 			rmt, err := zoci.NewRemote(ctx, ref.String(), zoci.PlatformForSkeleton(), oci.WithPlainHTTP(true))
 			require.NoError(t, err)
 
+			// Fetch from remote and compare
 			pkg, err := rmt.FetchZarfYAML(ctx)
 			require.NoError(t, err)
-
 			require.Equal(t, pkg, expectedPkg)
-
-			// TODO: check sha of the resulting publish
-			// err := oras.PackManifest()
-			// require.NoError(t, err)
 		})
 	}
 }
