@@ -54,7 +54,7 @@ func Publish(ctx context.Context, opts PublishOpts) error {
 	if err != nil {
 		return err
 	}
-	// TODO Resolve compiler errors
+	// TODO(mkcp): Resolve compiler errors
 	err = rem.PublishPackage(ctx, pkg, paths, concurrency)
 	if err != nil {
 		return err
