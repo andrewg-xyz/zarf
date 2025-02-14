@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zarf-dev/zarf/src/api/v1alpha1"
 	"github.com/zarf-dev/zarf/src/internal/packager2/layout"
+	"github.com/zarf-dev/zarf/src/pkg/lint"
 	"github.com/zarf-dev/zarf/src/pkg/zoci"
 	"github.com/zarf-dev/zarf/src/test/testutil"
 	"oras.land/oras-go/v2/registry"
@@ -20,6 +21,7 @@ import (
 
 func TestPublishError(t *testing.T) {
 	ctx := context.Background()
+	lint.ZarfSchema = testutil.LoadSchema(t, "../../../zarf.schema.json")
 
 	// TODO add freeport
 	registryURL := testutil.SetupInMemoryRegistry(ctx, t, 5000)
@@ -34,7 +36,7 @@ func TestPublishError(t *testing.T) {
 		expectErr error
 	}{
 		{
-			name:      "Test empty publishopts",
+			name:      "Test empty publish opts",
 			opts:      PublishOpts{},
 			expectErr: errors.New("invalid registry"),
 		},
@@ -77,6 +79,7 @@ func TestPublish(t *testing.T) {
 			opts: PublishOpts{
 				Path:     "testdata/skeleton",
 				Registry: ref,
+				WithPlainHTTP: true,
 			},
 		},
 	}

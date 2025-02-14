@@ -7,8 +7,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/defenseunicorns/pkg/oci"
-	"github.com/zarf-dev/zarf/src/internal/packager2/layout"
+	layout2 "github.com/zarf-dev/zarf/src/internal/packager2/layout"
+	"github.com/zarf-dev/zarf/src/pkg/layout"
 	"github.com/zarf-dev/zarf/src/pkg/zoci"
 	"oras.land/oras-go/v2/registry"
 )
@@ -39,38 +41,37 @@ func Publish(ctx context.Context, opts PublishOpts) error {
 
 	// TODO skeleton and flavors during publish
 	// TODO Create skeleton locally
-	cOpts := layout.CreateOptions{
+	cOpts := layout2.CreateOptions{
 		SigningKeyPath:     opts.SigningKeyPath,
 		SigningKeyPassword: opts.SigningKeyPassword,
+		SetVariables:       map[string]string{},
 	}
 	// TODO Resolve compiler errors
-	buildPath, err := layout.CreateSkeleton(ctx, opts.Path, cOpts)
+	buildPath, err := layout2.CreateSkeleton(ctx, opts.Path, cOpts)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to create skeleton: %w", err)
 	}
 
-	layoutOpt := layout.PackageLayoutOptions{
+	layoutOpt := layout2.PackageLayoutOptions{
 		SkipSignatureValidation: opts.SkipSignatureValidation,
 		IsPartial:               true,
 	}
-	pkgLayout, err := layout.LoadFromTar(ctx, buildPath, layoutOpt)
+	pkgLayout, err := layout2.LoadFromDir(ctx, buildPath, layoutOpt)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to load package: %w", err)
 	}
 
 	// TODO can we convert from packager types to packager2 types
-
-	// TODO Do publish to remote
-
-	// TODO Resolve compiler errors
 	rem, err := zoci.NewRemote(ctx, opts.Registry.String(), zoci.PlatformForSkeleton(), oci.WithPlainHTTP(opts.WithPlainHTTP))
 	if err != nil {
-		return err
+		return fmt.Errorf("could not instantiate remote: %w", err)
 	}
-	// TODO(mkcp): Resolve compiler errors
-	err = rem.PublishPackage(ctx, &pkgLayout.Pkg, paths, concurrency)
+	layout1 := layout.New(pkgLayout.DirPath())
+
+	spew.Dump(rem, pkgLayout, layout1)
+	err = rem.PublishPackage(ctx, &pkgLayout.Pkg, layout1, 3)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not publish package: %w", err)
 	}
 
 	return nil
