@@ -3,7 +3,6 @@ package packager2
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -77,8 +76,8 @@ func TestPublish(t *testing.T) {
 		{
 			name: "Publish skeleton package",
 			opts: PublishOpts{
-				Path:     "testdata/skeleton",
-				Registry: ref,
+				Path:          "testdata/skeleton",
+				Registry:      ref,
 				WithPlainHTTP: true,
 			},
 		},
@@ -101,11 +100,9 @@ func TestPublish(t *testing.T) {
 			require.NoError(t, err)
 
 			// Format url and instantiate remote
-			format := "%s/%s:%s"
-			artifactURL := fmt.Sprintf(format, registryURL, expectedPkg.Metadata.Name, expectedPkg.Metadata.Version)
-			ref, err := registry.ParseReference(artifactURL)
+			ref, err := zoci.ReferenceFromMetadata(tc.opts.Registry.String(), &expectedPkg.Metadata, &expectedPkg.Build)
 			require.NoError(t, err)
-			rmt, err := zoci.NewRemote(ctx, ref.String(), zoci.PlatformForSkeleton(), oci.WithPlainHTTP(true))
+			rmt, err := zoci.NewRemote(ctx, ref, zoci.PlatformForSkeleton(), oci.WithPlainHTTP(true))
 			require.NoError(t, err)
 
 			// Fetch from remote and compare

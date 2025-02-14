@@ -35,7 +35,7 @@ func (r *Remote) PublishPackage(ctx context.Context, pkg *v1alpha1.ZarfPackage, 
 	spinner := message.NewProgressSpinner("")
 	defer spinner.Stop()
 
-	// Get all of the layers in the package
+	// Get all the layers in the package
 	var descs []ocispec.Descriptor
 	for name, path := range paths.Files() {
 		spinner.Updatef("Preparing layer %s", helpers.First30Last30(name))
@@ -62,40 +62,36 @@ func (r *Remote) PublishPackage(ctx context.Context, pkg *v1alpha1.ZarfPackage, 
 	if err != nil {
 		return err
 	}
-	fmt.Println("got past referrs")
+
 	// push the manifest config
 	manifestConfigDesc, err := r.CreateAndPushManifestConfig(ctx, annotations, ZarfConfigMediaType)
 	if err != nil {
 		return err
 	}
-	fmt.Println("pushed config")
 	root, err := r.PackAndTagManifest(ctx, src, descs, manifestConfigDesc, annotations)
 	if err != nil {
 		return err
 	}
-	fmt.Println("tagged manifests")
+
 	total += manifestConfigDesc.Size
 
-	// progressBar := message.NewProgressBar(total, fmt.Sprintf("Publishing %s:%s", r.Repo().Reference.Repository, r.Repo().Reference.Reference))
-	// defer func(progressBar *message.ProgressBar) {
-	// 	err2 := progressBar.Close()
-	// 	err = errors.Join(err, err2)
-	// }(progressBar)
-	// r.SetProgressWriter(progressBar)
-	// defer r.ClearProgressWriter()
+	progressBar := message.NewProgressBar(total, fmt.Sprintf("Publishing %s:%s", r.Repo().Reference.Repository, r.Repo().Reference.Reference))
+	defer func(progressBar *message.ProgressBar) {
+		err2 := progressBar.Close()
+		err = errors.Join(err, err2)
+	}(progressBar)
+	r.SetProgressWriter(progressBar)
+	defer r.ClearProgressWriter()
 
-	fmt.Println("right before copy")
 	publishedDesc, err := oras.Copy(ctx, src, root.Digest.String(), r.Repo(), "", copyOpts)
 	if err != nil {
-		return fmt.Errorf("failing during copy: %w", err)
+		return fmt.Errorf("failed to copy: %w", err)
 	}
-	fmt.Println("copied")
-	fmt.Println("sending in reference", r.Repo().Reference.Reference)
 	if err := r.UpdateIndex(ctx, r.Repo().Reference.Reference, publishedDesc); err != nil {
-		return fmt.Errorf("failing during index: %w", err)
+		return fmt.Errorf("failed to update index: %w", err)
 	}
 
-	// progressBar.Successf("Published %s [%s]", r.Repo().Reference, ZarfLayerMediaTypeBlob)
+	progressBar.Successf("Published %s [%s]", r.Repo().Reference, ZarfLayerMediaTypeBlob)
 	return nil
 }
 

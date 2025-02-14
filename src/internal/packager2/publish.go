@@ -6,8 +6,6 @@ package packager2
 import (
 	"context"
 	"fmt"
-
-	"github.com/davecgh/go-spew/spew"
 	"github.com/defenseunicorns/pkg/oci"
 	layout2 "github.com/zarf-dev/zarf/src/internal/packager2/layout"
 	"github.com/zarf-dev/zarf/src/pkg/layout"
@@ -62,13 +60,18 @@ func Publish(ctx context.Context, opts PublishOpts) error {
 	}
 
 	// TODO can we convert from packager types to packager2 types
-	rem, err := zoci.NewRemote(ctx, opts.Registry.String(), zoci.PlatformForSkeleton(), oci.WithPlainHTTP(opts.WithPlainHTTP))
+	ref, err := zoci.ReferenceFromMetadata(opts.Registry.String(), &pkgLayout.Pkg.Metadata, &pkgLayout.Pkg.Build)
+	if err != nil {
+		return fmt.Errorf("unable to create reference: %w", err)
+	}
+
+	rem, err := zoci.NewRemote(ctx, ref, zoci.PlatformForSkeleton(),
+		oci.WithPlainHTTP(opts.WithPlainHTTP))
 	if err != nil {
 		return fmt.Errorf("could not instantiate remote: %w", err)
 	}
 	layout1 := layout.New(pkgLayout.DirPath())
 
-	spew.Dump(rem, pkgLayout, layout1)
 	err = rem.PublishPackage(ctx, &pkgLayout.Pkg, layout1, 3)
 	if err != nil {
 		return fmt.Errorf("could not publish package: %w", err)
