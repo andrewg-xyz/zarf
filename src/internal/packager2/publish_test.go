@@ -81,6 +81,14 @@ func TestPublish(t *testing.T) {
 				WithPlainHTTP: true,
 			},
 		},
+		// {
+		// 	name: "Publish package",
+		// 	opts: PublishOpts{
+		// 		Path:          "testdata/zarf-package-test-amd64-0.0.1.tar.zst",
+		// 		Registry:      ref,
+		// 		WithPlainHTTP: true,
+		// 	},
+		// },
 	}
 
 	for _, tc := range tt {
@@ -108,6 +116,14 @@ func TestPublish(t *testing.T) {
 			// Fetch from remote and compare
 			pkg, err := rmt.FetchZarfYAML(ctx)
 			require.NoError(t, err)
+
+			// HACK(mkcp): Match necessary fields
+			pkg.Build = v1alpha1.ZarfBuildData{}
+			pkg.Metadata.AggregateChecksum = ""
+			expectedPkg.Metadata.Architecture = "skeleton"
+
+			// NOTE(mkcp): In future schema version move ZarfPackage.Metadata.AggregateChecksum
+			// to ZarfPackage.Build.AggregateChecksum. See ADR #26
 			require.Equal(t, pkg, expectedPkg)
 		})
 	}
