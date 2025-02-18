@@ -6,6 +6,8 @@ package packager2
 import (
 	"context"
 	"fmt"
+	"os"
+
 	"github.com/defenseunicorns/pkg/oci"
 	layout2 "github.com/zarf-dev/zarf/src/internal/packager2/layout"
 	"github.com/zarf-dev/zarf/src/pkg/layout"
@@ -37,26 +39,38 @@ func Publish(ctx context.Context, opts PublishOpts) error {
 		return fmt.Errorf("path must be specified")
 	}
 
-	// TODO skeleton and flavors during publish
-	// TODO Create skeleton locally
-	cOpts := layout2.CreateOptions{
-		SigningKeyPath:     opts.SigningKeyPath,
-		SigningKeyPassword: opts.SigningKeyPassword,
-		SetVariables:       map[string]string{},
-	}
-	// TODO Resolve compiler errors
-	buildPath, err := layout2.CreateSkeleton(ctx, opts.Path, cOpts)
+	// TODO determining the source target in order to determine skeleton / built package / oci to oci
+
+	var pkgLayout *layout2.PackageLayout
+
+	fi, err := os.Stat(opts.Path)
 	if err != nil {
-		return fmt.Errorf("unable to create skeleton: %w", err)
+		return err
 	}
 
-	layoutOpt := layout2.PackageLayoutOptions{
-		SkipSignatureValidation: opts.SkipSignatureValidation,
-		IsPartial:               true,
-	}
-	pkgLayout, err := layout2.LoadFromDir(ctx, buildPath, layoutOpt)
-	if err != nil {
-		return fmt.Errorf("unable to load package: %w", err)
+	if fi.IsDir() {
+
+		// TODO skeleton and flavors during publish
+		// TODO Create skeleton locally
+		cOpts := layout2.CreateOptions{
+			SigningKeyPath:     opts.SigningKeyPath,
+			SigningKeyPassword: opts.SigningKeyPassword,
+			SetVariables:       map[string]string{},
+		}
+		// TODO Resolve compiler errors
+		buildPath, err := layout2.CreateSkeleton(ctx, opts.Path, cOpts)
+		if err != nil {
+			return fmt.Errorf("unable to create skeleton: %w", err)
+		}
+
+		layoutOpt := layout2.PackageLayoutOptions{
+			SkipSignatureValidation: opts.SkipSignatureValidation,
+			IsPartial:               true,
+		}
+		pkgLayout, err = layout2.LoadFromDir(ctx, buildPath, layoutOpt)
+		if err != nil {
+			return fmt.Errorf("unable to load package: %w", err)
+		}
 	}
 
 	// TODO can we convert from packager types to packager2 types
