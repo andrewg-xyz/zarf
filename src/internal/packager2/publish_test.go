@@ -59,7 +59,7 @@ func TestPublishError(t *testing.T) {
 	}
 }
 
-func TestPublish(t *testing.T) {
+func TestPublishSkeleton(t *testing.T) {
 	ctx := context.Background()
 
 	// TODO add freeport
@@ -125,6 +125,52 @@ func TestPublish(t *testing.T) {
 			// NOTE(mkcp): In future schema version move ZarfPackage.Metadata.AggregateChecksum
 			// to ZarfPackage.Build.AggregateChecksum. See ADR #26
 			require.Equal(t, pkg, expectedPkg)
+		})
+	}
+}
+
+func TestPublishPackage(t *testing.T) {
+	ctx := context.Background()
+
+	// TODO add freeport
+	registryURL := testutil.SetupInMemoryRegistry(ctx, t, 5000)
+	ref := registry.Reference{
+		Registry:   registryURL,
+		Repository: "my-namespace",
+	}
+
+	tt := []struct {
+		name string
+		opts PublishOpts
+	}{
+		{
+			name: "Publish package",
+			opts: PublishOpts{
+				Path:          "testdata/zarf-package-test-amd64-0.0.1.tar.zst",
+				Registry:      ref,
+				WithPlainHTTP: true,
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			// TODO Make parallel
+			// t.Parallel()
+
+			// Publish test package
+			err := Publish(context.Background(), tc.opts)
+			require.NoError(t, err)
+
+			// Format url and instantiate remote
+			ref, err := zoci.ReferenceFromMetadata(tc.opts.Registry.String(), &expectedPkg.Metadata, &expectedPkg.Build)
+			require.NoError(t, err)
+			rmt, err := zoci.NewRemote(ctx, ref, zoci.PlatformForSkeleton(), oci.WithPlainHTTP(true))
+			require.NoError(t, err)
+
+			// Fetch from remote and compare
+			pkg, err := rmt.FetchZarfYAML(ctx)
+			require.NoError(t, err)
 		})
 	}
 }
