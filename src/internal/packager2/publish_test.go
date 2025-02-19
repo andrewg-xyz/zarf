@@ -12,7 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zarf-dev/zarf/src/api/v1alpha1"
 	"github.com/zarf-dev/zarf/src/internal/packager2/layout"
+	layout2 "github.com/zarf-dev/zarf/src/internal/packager2/layout"
 	"github.com/zarf-dev/zarf/src/pkg/lint"
+	"github.com/zarf-dev/zarf/src/pkg/packager/filters"
 	"github.com/zarf-dev/zarf/src/pkg/zoci"
 	"github.com/zarf-dev/zarf/src/test/testutil"
 	"oras.land/oras-go/v2/registry"
@@ -157,19 +159,21 @@ func TestPublishPackage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// TODO Make parallel
 			// t.Parallel()
+			ctx := context.Background()
 
 			// Publish test package
-			err := Publish(context.Background(), tc.opts)
+			err := Publish(ctx, tc.opts)
 			require.NoError(t, err)
 
+			// We want to pull the package and sure the content is the same as the local package
+
+			pkgLayout, err := layout2.LoadFromTar(ctx, tc.opts.Path, layout2.PackageLayoutOptions{})
+			require.NoError(t, err)
 			// Format url and instantiate remote
-			ref, err := zoci.ReferenceFromMetadata(tc.opts.Registry.String(), &expectedPkg.Metadata, &expectedPkg.Build)
+			ref, err := zoci.ReferenceFromMetadata(tc.opts.Registry.String(), &pkgLayout.Pkg.Metadata, &pkgLayout.Pkg.Build)
 			require.NoError(t, err)
-			rmt, err := zoci.NewRemote(ctx, ref, zoci.PlatformForSkeleton(), oci.WithPlainHTTP(true))
-			require.NoError(t, err)
-
-			// Fetch from remote and compare
-			pkg, err := rmt.FetchZarfYAML(ctx)
+			tmpdir := t.TempDir()
+			_, err = pullOCI(context.Background(), ref, tmpdir, pkgLayout.Pkg.Metadata.AggregateChecksum, filters.Empty())
 			require.NoError(t, err)
 		})
 	}
