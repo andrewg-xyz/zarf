@@ -71,6 +71,17 @@ func Publish(ctx context.Context, opts PublishOpts) error {
 		if err != nil {
 			return fmt.Errorf("unable to load package: %w", err)
 		}
+	} else {
+		// publish a built package
+
+		// TODO: define what IsPartial purpose is in code docs
+		// TODO: check linter for packager2
+		layoutOpt := layout2.PackageLayoutOptions{
+			SkipSignatureValidation: opts.SkipSignatureValidation,
+			IsPartial:               false,
+		}
+
+		pkgLayout, err = layout2.LoadFromTar(ctx, opts.Path, layoutOpt)
 	}
 
 	// TODO can we convert from packager types to packager2 types
