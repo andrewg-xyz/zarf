@@ -6,6 +6,7 @@ package packager2
 import (
 	"context"
 	"fmt"
+
 	"github.com/defenseunicorns/pkg/oci"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	layout2 "github.com/zarf-dev/zarf/src/internal/packager2/layout"
@@ -15,6 +16,8 @@ import (
 )
 
 type PublishOpts struct {
+	// Concurrency configures the zoci push concurrency if empty defaults to 3.
+	Concurrency             int
 	Path                    string
 	Registry                registry.Reference
 	IsSkeleton              bool
@@ -24,10 +27,11 @@ type PublishOpts struct {
 	WithPlainHTTP           bool
 }
 
-// Takes directory/tar file & OCI Registry
-
-// TODO Dir points to a location on disk and registry is a URL.
+// Publish takes PublishOpts and uploads the package tarball, oci reference, or skeleton package to the registry.
 func Publish(ctx context.Context, opts PublishOpts) error {
+	// TODO: check linter for packager2
+	// TODO: should we be using packager2 oci NewRemote and Push instead of zoci?
+	// If so, do we need to implement a layout2.Copy function?
 	var err error
 
 	// Validate inputs
@@ -39,57 +43,49 @@ func Publish(ctx context.Context, opts PublishOpts) error {
 		return fmt.Errorf("path must be specified")
 	}
 
-	// TODO determining the source target in order to determine skeleton / built package / oci to oci
+	// TODO: determine if the source is an OCI reference and a zoci.CopyPackage() is required
+	// TODO: can you copy to and from the same registry?
 
 	var pkgLayout *layout2.PackageLayout
+	var platform ocispec.Platform
+
+	layoutOpt := layout2.PackageLayoutOptions{
+		SkipSignatureValidation: opts.SkipSignatureValidation,
+	}
 
 	if opts.IsSkeleton {
-		// TODO skeleton and flavors during publish
-		// TODO Create skeleton locally
 		cOpts := layout2.CreateOptions{
 			SigningKeyPath:     opts.SigningKeyPath,
 			SigningKeyPassword: opts.SigningKeyPassword,
 			SetVariables:       map[string]string{},
 		}
-		// TODO Resolve compiler errors
+
 		buildPath, err := layout2.CreateSkeleton(ctx, opts.Path, cOpts)
 		if err != nil {
 			return fmt.Errorf("unable to create skeleton: %w", err)
 		}
 
-		layoutOpt := layout2.PackageLayoutOptions{
-			SkipSignatureValidation: opts.SkipSignatureValidation,
-			IsPartial:               true,
-		}
+		// TODO: define what IsPartial purpose is in code docs
+		layoutOpt.IsPartial = true
 		pkgLayout, err = layout2.LoadFromDir(ctx, buildPath, layoutOpt)
 		if err != nil {
 			return fmt.Errorf("unable to load package: %w", err)
 		}
+		platform = zoci.PlatformForSkeleton()
 	} else {
 		// publish a built package
 
-		// TODO: define what IsPartial purpose is in code docs
-		// TODO: check linter for packager2
-		layoutOpt := layout2.PackageLayoutOptions{
-			SkipSignatureValidation: opts.SkipSignatureValidation,
-			IsPartial:               false,
-		}
-
 		pkgLayout, err = layout2.LoadFromTar(ctx, opts.Path, layoutOpt)
+		if err != nil {
+			return err
+		}
+		platform = ocispec.Platform{OS: "linux", Architecture: pkgLayout.Pkg.Metadata.Architecture}
 	}
 
 	// TODO can we convert from packager types to packager2 types
 	ref, err := zoci.ReferenceFromMetadata(opts.Registry.String(), &pkgLayout.Pkg.Metadata, &pkgLayout.Pkg.Build)
 	if err != nil {
 		return fmt.Errorf("unable to create reference: %w", err)
-	}
-
-	var platform ocispec.Platform
-
-	if opts.IsSkeleton {
-		platform = zoci.PlatformForSkeleton()
-	} else {
-		platform = ocispec.Platform{OS: "linux", Architecture: "amd64"}
 	}
 
 	rem, err := zoci.NewRemote(ctx, ref, platform, oci.WithPlainHTTP(opts.WithPlainHTTP))
@@ -99,7 +95,7 @@ func Publish(ctx context.Context, opts PublishOpts) error {
 	}
 	layout1 := layout.New(pkgLayout.DirPath())
 
-	err = rem.PublishPackage(ctx, &pkgLayout.Pkg, layout1, 3)
+	err = rem.PublishPackage(ctx, &pkgLayout.Pkg, layout1, opts.Concurrency)
 	if err != nil {
 		return fmt.Errorf("could not publish package: %w", err)
 	}
