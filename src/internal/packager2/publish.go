@@ -6,9 +6,8 @@ package packager2
 import (
 	"context"
 	"fmt"
-	"os"
-
 	"github.com/defenseunicorns/pkg/oci"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	layout2 "github.com/zarf-dev/zarf/src/internal/packager2/layout"
 	"github.com/zarf-dev/zarf/src/pkg/layout"
 	"github.com/zarf-dev/zarf/src/pkg/zoci"
@@ -29,6 +28,7 @@ type PublishOpts struct {
 
 // TODO Dir points to a location on disk and registry is a URL.
 func Publish(ctx context.Context, opts PublishOpts) error {
+	var err error
 
 	// Validate inputs
 	if err := opts.Registry.ValidateRegistry(); err != nil {
@@ -43,13 +43,7 @@ func Publish(ctx context.Context, opts PublishOpts) error {
 
 	var pkgLayout *layout2.PackageLayout
 
-	fi, err := os.Stat(opts.Path)
-	if err != nil {
-		return err
-	}
-
-	if fi.IsDir() {
-
+	if opts.IsSkeleton {
 		// TODO skeleton and flavors during publish
 		// TODO Create skeleton locally
 		cOpts := layout2.CreateOptions{
@@ -90,8 +84,16 @@ func Publish(ctx context.Context, opts PublishOpts) error {
 		return fmt.Errorf("unable to create reference: %w", err)
 	}
 
-	rem, err := zoci.NewRemote(ctx, ref, zoci.PlatformForSkeleton(),
-		oci.WithPlainHTTP(opts.WithPlainHTTP))
+	var platform ocispec.Platform
+
+	if opts.IsSkeleton {
+		platform = zoci.PlatformForSkeleton()
+	} else {
+		platform = ocispec.Platform{OS: "linux", Architecture: "amd64"}
+	}
+
+	rem, err := zoci.NewRemote(ctx, ref, platform, oci.WithPlainHTTP(opts.WithPlainHTTP))
+
 	if err != nil {
 		return fmt.Errorf("could not instantiate remote: %w", err)
 	}

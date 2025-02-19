@@ -101,7 +101,7 @@ func Pull(ctx context.Context, src, dir, shasum string, filter filters.Component
 	return nil
 }
 
-func pullOCI(ctx context.Context, src, tarPath, shasum string, filter filters.ComponentFilterStrategy) (bool, error) {
+func pullOCI(ctx context.Context, src, tarPath, shasum string, filter filters.ComponentFilterStrategy, mods ...oci.Modifier) (bool, error) {
 	tmpDir, err := utils.MakeTempDir(config.CommonOptions.TempDirectory)
 	if err != nil {
 		return false, err
@@ -111,7 +111,7 @@ func pullOCI(ctx context.Context, src, tarPath, shasum string, filter filters.Co
 		src = fmt.Sprintf("%s@sha256:%s", src, shasum)
 	}
 	arch := config.GetArch()
-	remote, err := zoci.NewRemote(ctx, src, oci.PlatformForArch(arch))
+	remote, err := zoci.NewRemote(ctx, src, oci.PlatformForArch(arch), mods...)
 	if err != nil {
 		return false, err
 	}
