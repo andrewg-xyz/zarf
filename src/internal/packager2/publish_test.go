@@ -2,11 +2,14 @@ package packager2
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+
+	// ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/defenseunicorns/pkg/oci"
 	goyaml "github.com/goccy/go-yaml"
@@ -15,6 +18,7 @@ import (
 	"github.com/zarf-dev/zarf/src/internal/packager2/layout"
 	layout2 "github.com/zarf-dev/zarf/src/internal/packager2/layout"
 	"github.com/zarf-dev/zarf/src/pkg/lint"
+	"github.com/zarf-dev/zarf/src/pkg/packager/filters"
 	"github.com/zarf-dev/zarf/src/pkg/zoci"
 	"github.com/zarf-dev/zarf/src/test/testutil"
 	"oras.land/oras-go/v2/registry"
@@ -167,19 +171,30 @@ func TestPublishPackage(t *testing.T) {
 			require.NoError(t, err)
 
 			// Fetch from remote and compare
-			// TODO(mkcp): Migrate to pullOCI and packager2 functions for this test.
-			rmt, err := zoci.NewRemote(ctx, ref, ocispec.Platform{
-				Architecture: "amd64",
-				OS:           "linux",
-			}, oci.WithPlainHTTP(true))
-			require.NoError(t, err)
-			_, err = rmt.FetchZarfYAML(ctx)
-			require.NoError(t, err)
+			// // TODO(mkcp): Migrate to pullOCI and packager2 functions for this test.
+			// rmt, err := zoci.NewRemote(ctx, ref, ocispec.Platform{
+			// 	Architecture: "amd64",
+			// 	OS:           "linux",
+			// }, oci.WithPlainHTTP(true))
+			// require.NoError(t, err)
+			// _, err = rmt.FetchZarfYAML(ctx)
+			// require.NoError(t, err)
 
 			// FIXME(mkcp): This failed on "could not fetch image index, not found" given the same ref
-			// tmpdir := t.TempDir()
-			// 	_, err = pullOCI(context.Background(), ref, tmpdir, pkgLayout.Pkg.Metadata.AggregateChecksum, filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
-			// 	require.NoError(t, err)
+			tmpdir := t.TempDir()
+			tarPath := fmt.Sprintf("%s/%s", tmpdir, "data.tar.zst")
+			_, err = pullOCI(context.Background(), ref, tarPath, "", filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
+			require.NoError(t, err)
+
+			b1, err := os.ReadFile(tc.opts.Path)
+			require.NoError(t, err)
+			sum1 := sha256.Sum256(b1)
+
+			b2, err := os.ReadFile(tarPath)
+			require.NoError(t, err)
+			sum2 := sha256.Sum256(b2)
+
+			require.Equal(t, sum1, sum2, "Uploaded package does not match package downloaded")
 		})
 	}
 }

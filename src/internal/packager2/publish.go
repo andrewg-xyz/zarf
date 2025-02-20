@@ -10,7 +10,7 @@ import (
 	"github.com/defenseunicorns/pkg/oci"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	layout2 "github.com/zarf-dev/zarf/src/internal/packager2/layout"
-	"github.com/zarf-dev/zarf/src/pkg/layout"
+	// "github.com/zarf-dev/zarf/src/pkg/layout"
 	"github.com/zarf-dev/zarf/src/pkg/zoci"
 	"oras.land/oras-go/v2/registry"
 )
@@ -71,6 +71,7 @@ func Publish(ctx context.Context, opts PublishOpts) error {
 		if err != nil {
 			return fmt.Errorf("unable to load package: %w", err)
 		}
+		// cleanup zoci use
 		platform = zoci.PlatformForSkeleton()
 	} else {
 		// publish a built package
@@ -79,23 +80,32 @@ func Publish(ctx context.Context, opts PublishOpts) error {
 		if err != nil {
 			return err
 		}
-		platform = ocispec.Platform{OS: "linux", Architecture: pkgLayout.Pkg.Metadata.Architecture}
+		platform = ocispec.Platform{OS: oci.MultiOS, Architecture: pkgLayout.Pkg.Metadata.Architecture}
 	}
 
-	// TODO can we convert from packager types to packager2 types
-	ref, err := zoci.ReferenceFromMetadata(opts.Registry.String(), &pkgLayout.Pkg.Metadata, &pkgLayout.Pkg.Build)
+	ref, err := layout2.ReferenceFromMetadata(opts.Registry.String(), pkgLayout.Pkg)
 	if err != nil {
-		return fmt.Errorf("unable to create reference: %w", err)
+		return err
 	}
 
-	rem, err := zoci.NewRemote(ctx, ref, platform, oci.WithPlainHTTP(opts.WithPlainHTTP))
+	// // TODO can we convert from packager types to packager2 types
+	// ref, err := zoci.ReferenceFromMetadata(opts.Registry.String(), &pkgLayout.Pkg.Metadata, &pkgLayout.Pkg.Build)
+	// if err != nil {
+	// 	return fmt.Errorf("unable to create reference: %w", err)
+	// }
+
+	rem, err := layout2.NewRemote(ctx, ref, platform, oci.WithPlainHTTP(opts.WithPlainHTTP))
+
+	// rem, err := zoci.NewRemote(ctx, ref, platform, oci.WithPlainHTTP(opts.WithPlainHTTP))
 
 	if err != nil {
 		return fmt.Errorf("could not instantiate remote: %w", err)
 	}
-	layout1 := layout.New(pkgLayout.DirPath())
+	// layout1 := layout.New(pkgLayout.DirPath())
 
-	err = rem.PublishPackage(ctx, &pkgLayout.Pkg, layout1, opts.Concurrency)
+	err = rem.Push(ctx, pkgLayout, opts.Concurrency)
+
+	// err = rem.PublishPackage(ctx, &pkgLayout.Pkg, layout1, opts.Concurrency)
 	if err != nil {
 		return fmt.Errorf("could not publish package: %w", err)
 	}
