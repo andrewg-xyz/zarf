@@ -170,16 +170,6 @@ func TestPublishPackage(t *testing.T) {
 			ref, err := zoci.ReferenceFromMetadata(tc.opts.Registry.String(), &pkgLayout.Pkg.Metadata, &pkgLayout.Pkg.Build)
 			require.NoError(t, err)
 
-			// Fetch from remote and compare
-			// // TODO(mkcp): Migrate to pullOCI and packager2 functions for this test.
-			// rmt, err := zoci.NewRemote(ctx, ref, ocispec.Platform{
-			// 	Architecture: "amd64",
-			// 	OS:           "linux",
-			// }, oci.WithPlainHTTP(true))
-			// require.NoError(t, err)
-			// _, err = rmt.FetchZarfYAML(ctx)
-			// require.NoError(t, err)
-
 			// FIXME(mkcp): This failed on "could not fetch image index, not found" given the same ref
 			tmpdir := t.TempDir()
 			tarPath := fmt.Sprintf("%s/%s", tmpdir, "data.tar.zst")

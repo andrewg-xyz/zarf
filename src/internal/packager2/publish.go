@@ -6,109 +6,127 @@ package packager2
 import (
 	"context"
 	"fmt"
+	"github.com/zarf-dev/zarf/src/pkg/logger"
 
 	"github.com/defenseunicorns/pkg/oci"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	layout2 "github.com/zarf-dev/zarf/src/internal/packager2/layout"
 	// "github.com/zarf-dev/zarf/src/pkg/layout"
-	"github.com/zarf-dev/zarf/src/pkg/zoci"
 	"oras.land/oras-go/v2/registry"
 )
 
+// PublishOpts declares the parameters to publish a package.
 type PublishOpts struct {
 	// Concurrency configures the zoci push concurrency if empty defaults to 3.
-	Concurrency             int
-	Path                    string
-	Registry                registry.Reference
-	IsSkeleton              bool
-	SigningKeyPath          string
-	SigningKeyPassword      string
+	Concurrency int
+	// Path (required) points to the location of the build package to Publish. Path can be a package tarball on disk, a
+	// skeleton package directory on disk, or a .
+	Path string
+	// Registry (required) points to a registry.Reference for the publish destination.
+	Registry registry.Reference
+	// IsSkeleton flags whether a package path is a skeleton pkg.
+	IsSkeleton bool
+	// SigningKeyPath points to a signing key on the local disk.
+	SigningKeyPath string
+	// SigningKeyPassword holds a password to use the key at SigningKeyPath.
+	SigningKeyPassword string
+	// SkipSignatureValidation flags whether Publish should skip validating the signature.
 	SkipSignatureValidation bool
-	WithPlainHTTP           bool
+	// WithPlainHTTP falls back to plain HTTP for the registry calls instead of TLS.
+	WithPlainHTTP bool
 }
 
 // Publish takes PublishOpts and uploads the package tarball, oci reference, or skeleton package to the registry.
 func Publish(ctx context.Context, opts PublishOpts) error {
+	l := logger.From(ctx)
 	// TODO: check linter for packager2
 	// TODO: should we be using packager2 oci NewRemote and Push instead of zoci?
 	// If so, do we need to implement a layout2.Copy function?
-	var err error
+	// TODO: determine if the source is an OCI reference and a zoci.CopyPackage() is required
+	// TODO: can you copy to and from the same registry?
 
 	// Validate inputs
+	l.Debug("validating PublishOpts")
 	if err := opts.Registry.ValidateRegistry(); err != nil {
 		return fmt.Errorf("invalid registry: %w", err)
 	}
-
 	if opts.Path == "" {
 		return fmt.Errorf("path must be specified")
 	}
 
-	// TODO: determine if the source is an OCI reference and a zoci.CopyPackage() is required
-	// TODO: can you copy to and from the same registry?
-
+	// Load package layout
+	l.Info("loading package", "path", opts.Path)
 	var pkgLayout *layout2.PackageLayout
-	var platform ocispec.Platform
-
-	layoutOpt := layout2.PackageLayoutOptions{
-		SkipSignatureValidation: opts.SkipSignatureValidation,
-	}
-
+	var err error
 	if opts.IsSkeleton {
-		cOpts := layout2.CreateOptions{
-			SigningKeyPath:     opts.SigningKeyPath,
-			SigningKeyPassword: opts.SigningKeyPassword,
-			SetVariables:       map[string]string{},
-		}
-
-		buildPath, err := layout2.CreateSkeleton(ctx, opts.Path, cOpts)
+		l.Debug("loading skeleton package", "path", opts.Path)
+		pkgLayout, err = loadSkeleton(ctx, opts)
 		if err != nil {
-			return fmt.Errorf("unable to create skeleton: %w", err)
+			return fmt.Errorf("unable to load skeleton: %w", err)
 		}
-
-		// TODO: define what IsPartial purpose is in code docs
-		layoutOpt.IsPartial = true
-		pkgLayout, err = layout2.LoadFromDir(ctx, buildPath, layoutOpt)
+	} else {
+		l.Debug("loading package", "path", opts.Path)
+		pkgLayout, err = loadPackage(ctx, opts.Path, opts.SkipSignatureValidation)
 		if err != nil {
 			return fmt.Errorf("unable to load package: %w", err)
 		}
-		// cleanup zoci use
-		platform = zoci.PlatformForSkeleton()
-	} else {
-		// publish a built package
-
-		pkgLayout, err = layout2.LoadFromTar(ctx, opts.Path, layoutOpt)
-		if err != nil {
-			return err
-		}
-		platform = ocispec.Platform{OS: oci.MultiOS, Architecture: pkgLayout.Pkg.Metadata.Architecture}
 	}
 
-	ref, err := layout2.ReferenceFromMetadata(opts.Registry.String(), pkgLayout.Pkg)
+	return pushToRemote(ctx, pkgLayout, opts)
+}
+
+// loadSkeleton generates a skeleton package from a directory
+func loadSkeleton(ctx context.Context, opts PublishOpts) (*layout2.PackageLayout, error) {
+	// Create skeleton buildpath
+	createOpts := layout2.CreateOptions{
+		SigningKeyPath:     opts.SigningKeyPath,
+		SigningKeyPassword: opts.SigningKeyPassword,
+		SetVariables:       map[string]string{},
+	}
+	buildPath, err := layout2.CreateSkeleton(ctx, opts.Path, createOpts)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create skeleton: %w", err)
+	}
+
+	// Generate partial layout from buildpath
+	layoutOpts := layout2.PackageLayoutOptions{
+		SkipSignatureValidation: opts.SkipSignatureValidation,
+		// TODO: define what IsPartial purpose is in code docs
+		IsPartial: true,
+	}
+	return layout2.LoadFromDir(ctx, buildPath, layoutOpts)
+}
+
+// loadPackage loads an existing package's layout from tarball
+func loadPackage(ctx context.Context, path string, isSkipValidation bool) (*layout2.PackageLayout, error) {
+	layoutOpts := layout2.PackageLayoutOptions{
+		SkipSignatureValidation: isSkipValidation,
+	}
+	return layout2.LoadFromTar(ctx, path, layoutOpts)
+}
+
+func pushToRemote(ctx context.Context, layout *layout2.PackageLayout, opts PublishOpts) error {
+	// Build Reference for remote from registry location and pkg
+	ref, err := layout2.ReferenceFromMetadata(opts.Registry.String(), layout.Pkg)
 	if err != nil {
 		return err
 	}
 
-	// // TODO can we convert from packager types to packager2 types
-	// ref, err := zoci.ReferenceFromMetadata(opts.Registry.String(), &pkgLayout.Pkg.Metadata, &pkgLayout.Pkg.Build)
-	// if err != nil {
-	// 	return fmt.Errorf("unable to create reference: %w", err)
-	// }
+	// Set platform
+	p := ocispec.Platform{
+		OS:           oci.MultiOS,
+		Architecture: layout.Pkg.Metadata.Architecture,
+	}
 
-	rem, err := layout2.NewRemote(ctx, ref, platform, oci.WithPlainHTTP(opts.WithPlainHTTP))
-
-	// rem, err := zoci.NewRemote(ctx, ref, platform, oci.WithPlainHTTP(opts.WithPlainHTTP))
-
+	// Set up remote repo client
+	rem, err := layout2.NewRemote(ctx, ref, p, oci.WithPlainHTTP(opts.WithPlainHTTP))
 	if err != nil {
 		return fmt.Errorf("could not instantiate remote: %w", err)
 	}
-	// layout1 := layout.New(pkgLayout.DirPath())
 
-	err = rem.Push(ctx, pkgLayout, opts.Concurrency)
-
-	// err = rem.PublishPackage(ctx, &pkgLayout.Pkg, layout1, opts.Concurrency)
-	if err != nil {
-		return fmt.Errorf("could not publish package: %w", err)
-	}
-
-	return nil
+	logger.From(ctx).Info("pushing package to remote registry",
+		"ref", ref,
+		"platform", p,
+		"concurrency ", opts.Concurrency)
+	return rem.Push(ctx, layout, opts.Concurrency)
 }
