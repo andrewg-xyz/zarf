@@ -29,7 +29,7 @@ import (
 type LoadOptions struct {
 	Source                  string
 	Shasum                  string
-	architecture            string
+	Architecture            string
 	PublicKeyPath           string
 	SkipSignatureValidation bool
 	Filter                  filters.ComponentFilterStrategy
@@ -41,7 +41,7 @@ func LoadPackage(ctx context.Context, opt LoadOptions) (*layout.PackageLayout, e
 	if err != nil {
 		return nil, err
 	}
-	architecture := config.GetArch(opt.architecture)
+	architecture := config.GetArch(opt.Architecture)
 
 	tmpDir, err := utils.MakeTempDir(config.CommonOptions.TempDirectory)
 	if err != nil {
@@ -170,7 +170,7 @@ func GetPackageFromSourceOrCluster(ctx context.Context, cluster *cluster.Cluster
 	loadOpt := LoadOptions{
 		Source:                  src,
 		SkipSignatureValidation: skipSignatureValidation,
-		architecture:            config.GetArch(),
+		Architecture:            config.GetArch(),
 		Filter:                  filters.Empty(),
 		PublicKeyPath:           publicKeyPath,
 	}
