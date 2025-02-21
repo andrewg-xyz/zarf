@@ -2,7 +2,6 @@ package packager2
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -170,27 +169,21 @@ func TestPublishPackage(t *testing.T) {
 			require.NoError(t, err)
 
 			// We want to pull the package and sure the content is the same as the local package
-			pkgLayout, err := layout2.LoadFromTar(ctx, tc.path, layout2.PackageLayoutOptions{})
+			layoutExpected, err := layout2.LoadFromTar(ctx, tc.path, layout2.PackageLayoutOptions{})
 			require.NoError(t, err)
 			// Format url and instantiate remote
-			ref, err := zoci.ReferenceFromMetadata(tc.ref.String(), &pkgLayout.Pkg.Metadata, &pkgLayout.Pkg.Build)
+			ref, err := zoci.ReferenceFromMetadata(tc.ref.String(), &layoutExpected.Pkg.Metadata, &layoutExpected.Pkg.Build)
 			require.NoError(t, err)
 
-			// FIXME(mkcp): This failed on "could not fetch image index, not found" given the same ref
+			// Generate tmpdir and pull published package from local registry
 			tmpdir := t.TempDir()
 			tarPath := fmt.Sprintf("%s/%s", tmpdir, "data.tar.zst")
 			_, err = pullOCI(context.Background(), ref, tarPath, "", "amd64", filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
 			require.NoError(t, err)
 
-			b1, err := os.ReadFile(tc.path)
+			layoutActual, err := layout2.LoadFromTar(ctx, tarPath, layout2.PackageLayoutOptions{})
 			require.NoError(t, err)
-			sum1 := sha256.Sum256(b1)
-
-			b2, err := os.ReadFile(tarPath)
-			require.NoError(t, err)
-			sum2 := sha256.Sum256(b2)
-
-			require.Equal(t, sum1, sum2, "Uploaded package does not match package downloaded")
+			require.Equal(t, layoutExpected.Pkg, layoutActual.Pkg, "Uploaded package is not identical to downloaded package")
 		})
 	}
 }
