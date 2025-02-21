@@ -108,10 +108,11 @@ func pushToRemote(ctx context.Context, layout *layout2.PackageLayout, ref regist
 		return err
 	}
 
+	arch := layout.Pkg.Metadata.Architecture
 	// Set platform
 	p := ocispec.Platform{
 		OS:           oci.MultiOS,
-		Architecture: layout.Pkg.Metadata.Architecture,
+		Architecture: arch,
 	}
 
 	// Set up remote repo client
@@ -122,7 +123,6 @@ func pushToRemote(ctx context.Context, layout *layout2.PackageLayout, ref regist
 
 	logger.From(ctx).Info("pushing package to remote registry",
 		"ref", ref,
-		"platform", p,
-		"concurrency ", opts.Concurrency)
+		"architecture", arch)
 	return rem.Push(ctx, layout, opts.Concurrency)
 }

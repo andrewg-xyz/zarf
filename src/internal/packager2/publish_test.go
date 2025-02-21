@@ -12,6 +12,7 @@ import (
 
 	"github.com/defenseunicorns/pkg/oci"
 	goyaml "github.com/goccy/go-yaml"
+	"github.com/phayes/freeport"
 	"github.com/stretchr/testify/require"
 	"github.com/zarf-dev/zarf/src/api/v1alpha1"
 	"github.com/zarf-dev/zarf/src/internal/packager2/layout"
@@ -66,26 +67,16 @@ func TestPublishError(t *testing.T) {
 }
 
 func TestPublishSkeleton(t *testing.T) {
-	ctx := context.Background()
 	lint.ZarfSchema = testutil.LoadSchema(t, "../../../zarf.schema.json")
-
-	// TODO add freeport
-	registryURL := testutil.SetupInMemoryRegistry(ctx, t, 5000)
-	defaultRef := registry.Reference{
-		Registry:   registryURL,
-		Repository: "my-namespace",
-	}
 
 	tt := []struct {
 		name string
 		path string
-		ref  registry.Reference
 		opts PublishOpts
 	}{
 		{
 			name: "Publish skeleton package",
 			path: "testdata/skeleton",
-			ref:  defaultRef,
 			opts: PublishOpts{
 				WithPlainHTTP: true,
 				IsSkeleton:    true,
@@ -95,11 +86,18 @@ func TestPublishSkeleton(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			// TODO Make parallel
-			// t.Parallel()
+			t.Parallel()
+			ctx := testutil.TestContext(t)
+			port, err := freeport.GetFreePort()
+			require.NoError(t, err)
+			registryURL := testutil.SetupInMemoryRegistry(ctx, t, port)
+			registryRef := registry.Reference{
+				Registry:   registryURL,
+				Repository: "my-namespace",
+			}
 
 			// Publish test package
-			err := Publish(context.Background(), tc.path, tc.ref, tc.opts)
+			err = Publish(ctx, tc.path, registryRef, tc.opts)
 			require.NoError(t, err)
 
 			// Read and unmarshall expected
@@ -110,7 +108,7 @@ func TestPublishSkeleton(t *testing.T) {
 			require.NoError(t, err)
 
 			// Format url and instantiate remote
-			ref, err := zoci.ReferenceFromMetadata(tc.ref.String(), &expectedPkg.Metadata, &expectedPkg.Build)
+			ref, err := zoci.ReferenceFromMetadata(registryRef.String(), &expectedPkg.Metadata, &expectedPkg.Build)
 			require.NoError(t, err)
 			rmt, err := zoci.NewRemote(ctx, ref, zoci.PlatformForSkeleton(), oci.WithPlainHTTP(true))
 			require.NoError(t, err)
@@ -132,25 +130,14 @@ func TestPublishSkeleton(t *testing.T) {
 }
 
 func TestPublishPackage(t *testing.T) {
-	ctx := context.Background()
-
-	// TODO add freeport
-	registryURL := testutil.SetupInMemoryRegistry(ctx, t, 5000)
-	defaultRef := registry.Reference{
-		Registry:   registryURL,
-		Repository: "my-namespace",
-	}
-
 	tt := []struct {
 		name string
 		path string
-		ref  registry.Reference
 		opts PublishOpts
 	}{
 		{
 			name: "Publish package",
 			path: "testdata/zarf-package-test-amd64-0.0.1.tar.zst",
-			ref:  defaultRef,
 			opts: PublishOpts{
 				WithPlainHTTP: true,
 			},
@@ -161,24 +148,31 @@ func TestPublishPackage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// TODO Make parallel
 			// file write is happening during publish oras.PackManifest, we should replace defer remove that
-			// t.Parallel()
-			ctx := context.Background()
+			t.Parallel()
+			ctx := testutil.TestContext(t)
+			port, err := freeport.GetFreePort()
+			require.NoError(t, err)
+			registryURL := testutil.SetupInMemoryRegistry(ctx, t, port)
+			registryRef := registry.Reference{
+				Registry:   registryURL,
+				Repository: "my-namespace",
+			}
 
 			// Publish test package
-			err := Publish(ctx, tc.path, tc.ref, tc.opts)
+			err = Publish(ctx, tc.path, registryRef, tc.opts)
 			require.NoError(t, err)
 
 			// We want to pull the package and sure the content is the same as the local package
 			layoutExpected, err := layout2.LoadFromTar(ctx, tc.path, layout2.PackageLayoutOptions{})
 			require.NoError(t, err)
 			// Format url and instantiate remote
-			ref, err := zoci.ReferenceFromMetadata(tc.ref.String(), &layoutExpected.Pkg.Metadata, &layoutExpected.Pkg.Build)
+			packageRef, err := zoci.ReferenceFromMetadata(registryRef.String(), &layoutExpected.Pkg.Metadata, &layoutExpected.Pkg.Build)
 			require.NoError(t, err)
 
 			// Generate tmpdir and pull published package from local registry
 			tmpdir := t.TempDir()
 			tarPath := fmt.Sprintf("%s/%s", tmpdir, "data.tar.zst")
-			_, err = pullOCI(context.Background(), ref, tarPath, "", "amd64", filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
+			_, err = pullOCI(context.Background(), packageRef, tarPath, "", "amd64", filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
 			require.NoError(t, err)
 
 			layoutActual, err := layout2.LoadFromTar(ctx, tarPath, layout2.PackageLayoutOptions{})

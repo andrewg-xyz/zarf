@@ -111,6 +111,7 @@ require (
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/onsi/gomega v1.35.1 // indirect
 	github.com/otiai10/mint v1.6.3 // indirect
+	github.com/phayes/freeport v0.0.0-20220201140144-74d24b5ae9f5 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/redis/go-redis/extra/rediscmd/v9 v9.0.5 // indirect
 	github.com/redis/go-redis/extra/redisotel/v9 v9.0.5 // indirect
