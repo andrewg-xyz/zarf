@@ -25,6 +25,7 @@ import (
 )
 
 func TestPublishError(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	lint.ZarfSchema = testutil.LoadSchema(t, "../../../zarf.schema.json")
 
@@ -67,6 +68,7 @@ func TestPublishError(t *testing.T) {
 }
 
 func TestPublishSkeleton(t *testing.T) {
+	t.Parallel()
 	lint.ZarfSchema = testutil.LoadSchema(t, "../../../zarf.schema.json")
 
 	tt := []struct {
@@ -85,7 +87,6 @@ func TestPublishSkeleton(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			ctx := testutil.TestContext(t)
 			port, err := freeport.GetFreePort()
 			require.NoError(t, err)
@@ -131,6 +132,7 @@ func TestPublishSkeleton(t *testing.T) {
 }
 
 func TestPublishPackage(t *testing.T) {
+	t.Parallel()
 	tt := []struct {
 		name string
 		path string
@@ -147,9 +149,7 @@ func TestPublishPackage(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			// TODO Make parallel
 			// file write is happening during publish oras.PackManifest, we should replace defer remove that
-			t.Parallel()
 			ctx := testutil.TestContext(t)
 			port, err := freeport.GetFreePort()
 			require.NoError(t, err)
