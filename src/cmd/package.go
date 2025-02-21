@@ -802,7 +802,7 @@ func (o *packagePullOptions) run(cmd *cobra.Command, args []string) error {
 		}
 		outputDir = wd
 	}
-	err := packager2.Pull(cmd.Context(), args[0], outputDir, pkgConfig.PkgOpts.Shasum, filters.Empty(), pkgConfig.PkgOpts.PublicKeyPath, pkgConfig.PkgOpts.SkipSignatureValidation)
+	err := packager2.Pull(cmd.Context(), args[0], outputDir, pkgConfig.PkgOpts.Shasum, config.GetArch(), filters.Empty(), pkgConfig.PkgOpts.PublicKeyPath, pkgConfig.PkgOpts.SkipSignatureValidation)
 	if err != nil {
 		return err
 	}

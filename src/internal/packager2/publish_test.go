@@ -161,6 +161,7 @@ func TestPublishPackage(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			// TODO Make parallel
+			// file write is happening during publish oras.PackManifest, we should replace defer remove that
 			// t.Parallel()
 			ctx := context.Background()
 
@@ -178,7 +179,7 @@ func TestPublishPackage(t *testing.T) {
 			// FIXME(mkcp): This failed on "could not fetch image index, not found" given the same ref
 			tmpdir := t.TempDir()
 			tarPath := fmt.Sprintf("%s/%s", tmpdir, "data.tar.zst")
-			_, err = pullOCI(context.Background(), ref, tarPath, "", filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
+			_, err = pullOCI(context.Background(), ref, tarPath, "", "amd64", filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
 			require.NoError(t, err)
 
 			b1, err := os.ReadFile(tc.path)

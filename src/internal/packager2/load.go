@@ -29,6 +29,7 @@ import (
 type LoadOptions struct {
 	Source                  string
 	Shasum                  string
+	architecture            string
 	PublicKeyPath           string
 	SkipSignatureValidation bool
 	Filter                  filters.ComponentFilterStrategy
@@ -40,6 +41,7 @@ func LoadPackage(ctx context.Context, opt LoadOptions) (*layout.PackageLayout, e
 	if err != nil {
 		return nil, err
 	}
+	architecture := config.GetArch(opt.architecture)
 
 	tmpDir, err := utils.MakeTempDir(config.CommonOptions.TempDirectory)
 	if err != nil {
@@ -51,7 +53,7 @@ func LoadPackage(ctx context.Context, opt LoadOptions) (*layout.PackageLayout, e
 	isPartial := false
 	switch srcType {
 	case "oci":
-		isPartial, err = pullOCI(ctx, opt.Source, tarPath, opt.Shasum, opt.Filter)
+		isPartial, err = pullOCI(ctx, opt.Source, tarPath, opt.Shasum, architecture, opt.Filter)
 		if err != nil {
 			return nil, err
 		}
@@ -168,6 +170,7 @@ func GetPackageFromSourceOrCluster(ctx context.Context, cluster *cluster.Cluster
 	loadOpt := LoadOptions{
 		Source:                  src,
 		SkipSignatureValidation: skipSignatureValidation,
+		architecture:            config.GetArch(),
 		Filter:                  filters.Empty(),
 		PublicKeyPath:           publicKeyPath,
 	}
