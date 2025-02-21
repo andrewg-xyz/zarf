@@ -19,11 +19,6 @@ import (
 type PublishOpts struct {
 	// Concurrency configures the zoci push concurrency if empty defaults to 3.
 	Concurrency int
-	// Path (required) points to the location of the build package to Publish. Path can be a package tarball on disk, a
-	// skeleton package directory on disk, or a .
-	Path string
-	// Registry (required) points to a registry.Reference for the publish destination.
-	Registry registry.Reference
 	// IsSkeleton flags whether a package path is a skeleton pkg.
 	IsSkeleton bool
 	// SigningKeyPath points to a signing key on the local disk.
@@ -36,8 +31,9 @@ type PublishOpts struct {
 	WithPlainHTTP bool
 }
 
-// Publish takes PublishOpts and uploads the package tarball, oci reference, or skeleton package to the registry.
-func Publish(ctx context.Context, opts PublishOpts) error {
+// Publish takes a Path to the location of the build package, a ref to a registry, and a PublishOpts and uploads the
+// package tarball, oci reference, or skeleton package to the registry.
+func Publish(ctx context.Context, path string, ref registry.Reference, opts PublishOpts) error {
 	l := logger.From(ctx)
 	// TODO: check linter for packager2
 	// TODO: should we be using packager2 oci NewRemote and Push instead of zoci?
@@ -47,43 +43,43 @@ func Publish(ctx context.Context, opts PublishOpts) error {
 
 	// Validate inputs
 	l.Debug("validating PublishOpts")
-	if err := opts.Registry.ValidateRegistry(); err != nil {
+	if err := ref.ValidateRegistry(); err != nil {
 		return fmt.Errorf("invalid registry: %w", err)
 	}
-	if opts.Path == "" {
+	if path == "" {
 		return fmt.Errorf("path must be specified")
 	}
 
 	// Load package layout
-	l.Info("loading package", "path", opts.Path)
+	l.Info("loading package", "path", path)
 	var pkgLayout *layout2.PackageLayout
 	var err error
 	if opts.IsSkeleton {
-		l.Debug("loading skeleton package", "path", opts.Path)
-		pkgLayout, err = loadSkeleton(ctx, opts)
+		l.Debug("loading skeleton package", "path", path)
+		pkgLayout, err = loadSkeleton(ctx, path, opts)
 		if err != nil {
 			return fmt.Errorf("unable to load skeleton: %w", err)
 		}
 	} else {
-		l.Debug("loading package", "path", opts.Path)
-		pkgLayout, err = loadPackage(ctx, opts.Path, opts.SkipSignatureValidation)
+		l.Debug("loading package", "path", path)
+		pkgLayout, err = loadPackage(ctx, path, opts.SkipSignatureValidation)
 		if err != nil {
 			return fmt.Errorf("unable to load package: %w", err)
 		}
 	}
 
-	return pushToRemote(ctx, pkgLayout, opts)
+	return pushToRemote(ctx, pkgLayout, ref, opts)
 }
 
 // loadSkeleton generates a skeleton package from a directory
-func loadSkeleton(ctx context.Context, opts PublishOpts) (*layout2.PackageLayout, error) {
+func loadSkeleton(ctx context.Context, path string, opts PublishOpts) (*layout2.PackageLayout, error) {
 	// Create skeleton buildpath
 	createOpts := layout2.CreateOptions{
 		SigningKeyPath:     opts.SigningKeyPath,
 		SigningKeyPassword: opts.SigningKeyPassword,
 		SetVariables:       map[string]string{},
 	}
-	buildPath, err := layout2.CreateSkeleton(ctx, opts.Path, createOpts)
+	buildPath, err := layout2.CreateSkeleton(ctx, path, createOpts)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create skeleton: %w", err)
 	}
@@ -105,9 +101,9 @@ func loadPackage(ctx context.Context, path string, isSkipValidation bool) (*layo
 	return layout2.LoadFromTar(ctx, path, layoutOpts)
 }
 
-func pushToRemote(ctx context.Context, layout *layout2.PackageLayout, opts PublishOpts) error {
+func pushToRemote(ctx context.Context, layout *layout2.PackageLayout, ref registry.Reference, opts PublishOpts) error {
 	// Build Reference for remote from registry location and pkg
-	ref, err := layout2.ReferenceFromMetadata(opts.Registry.String(), layout.Pkg)
+	r, err := layout2.ReferenceFromMetadata(ref.String(), layout.Pkg)
 	if err != nil {
 		return err
 	}
@@ -119,7 +115,7 @@ func pushToRemote(ctx context.Context, layout *layout2.PackageLayout, opts Publi
 	}
 
 	// Set up remote repo client
-	rem, err := layout2.NewRemote(ctx, ref, p, oci.WithPlainHTTP(opts.WithPlainHTTP))
+	rem, err := layout2.NewRemote(ctx, r, p, oci.WithPlainHTTP(opts.WithPlainHTTP))
 	if err != nil {
 		return fmt.Errorf("could not instantiate remote: %w", err)
 	}

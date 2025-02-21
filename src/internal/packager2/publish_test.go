@@ -30,13 +30,15 @@ func TestPublishError(t *testing.T) {
 
 	// TODO add freeport
 	registryURL := testutil.SetupInMemoryRegistry(ctx, t, 5000)
-	ref := registry.Reference{
+	defaultRef := registry.Reference{
 		Registry:   registryURL,
 		Repository: "my-namespace",
 	}
 
 	tt := []struct {
 		name      string
+		path      string
+		ref       registry.Reference
 		opts      PublishOpts
 		expectErr error
 	}{
@@ -46,11 +48,10 @@ func TestPublishError(t *testing.T) {
 			expectErr: errors.New("invalid registry"),
 		},
 		{
-			name: "Test empty path",
-			opts: PublishOpts{
-				Path:     "",
-				Registry: ref,
-			},
+			name:      "Test empty path",
+			path:      "",
+			ref:       defaultRef,
+			opts:      PublishOpts{},
 			expectErr: errors.New("path must be specified"),
 		},
 	}
@@ -59,7 +60,7 @@ func TestPublishError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// TODO Make parallel
 			// t.Parallel()
-			err := Publish(context.Background(), tc.opts)
+			err := Publish(context.Background(), tc.path, tc.ref, tc.opts)
 			require.ErrorContains(t, err, tc.expectErr.Error())
 		})
 	}
@@ -71,20 +72,22 @@ func TestPublishSkeleton(t *testing.T) {
 
 	// TODO add freeport
 	registryURL := testutil.SetupInMemoryRegistry(ctx, t, 5000)
-	ref := registry.Reference{
+	defaultRef := registry.Reference{
 		Registry:   registryURL,
 		Repository: "my-namespace",
 	}
 
 	tt := []struct {
 		name string
+		path string
+		ref  registry.Reference
 		opts PublishOpts
 	}{
 		{
 			name: "Publish skeleton package",
+			path: "testdata/skeleton",
+			ref:  defaultRef,
 			opts: PublishOpts{
-				Path:          "testdata/skeleton",
-				Registry:      ref,
 				WithPlainHTTP: true,
 				IsSkeleton:    true,
 			},
@@ -97,18 +100,18 @@ func TestPublishSkeleton(t *testing.T) {
 			// t.Parallel()
 
 			// Publish test package
-			err := Publish(context.Background(), tc.opts)
+			err := Publish(context.Background(), tc.path, tc.ref, tc.opts)
 			require.NoError(t, err)
 
 			// Read and unmarshall expected
-			data, err := os.ReadFile(filepath.Join(tc.opts.Path, layout.ZarfYAML))
+			data, err := os.ReadFile(filepath.Join(tc.path, layout.ZarfYAML))
 			require.NoError(t, err)
 			var expectedPkg v1alpha1.ZarfPackage
 			err = goyaml.Unmarshal(data, &expectedPkg)
 			require.NoError(t, err)
 
 			// Format url and instantiate remote
-			ref, err := zoci.ReferenceFromMetadata(tc.opts.Registry.String(), &expectedPkg.Metadata, &expectedPkg.Build)
+			ref, err := zoci.ReferenceFromMetadata(tc.ref.String(), &expectedPkg.Metadata, &expectedPkg.Build)
 			require.NoError(t, err)
 			rmt, err := zoci.NewRemote(ctx, ref, zoci.PlatformForSkeleton(), oci.WithPlainHTTP(true))
 			require.NoError(t, err)
@@ -134,20 +137,22 @@ func TestPublishPackage(t *testing.T) {
 
 	// TODO add freeport
 	registryURL := testutil.SetupInMemoryRegistry(ctx, t, 5000)
-	ref := registry.Reference{
+	defaultRef := registry.Reference{
 		Registry:   registryURL,
 		Repository: "my-namespace",
 	}
 
 	tt := []struct {
 		name string
+		path string
+		ref  registry.Reference
 		opts PublishOpts
 	}{
 		{
 			name: "Publish package",
+			path: "testdata/zarf-package-test-amd64-0.0.1.tar.zst",
+			ref:  defaultRef,
 			opts: PublishOpts{
-				Path:          "testdata/zarf-package-test-amd64-0.0.1.tar.zst",
-				Registry:      ref,
 				WithPlainHTTP: true,
 			},
 		},
@@ -160,14 +165,14 @@ func TestPublishPackage(t *testing.T) {
 			ctx := context.Background()
 
 			// Publish test package
-			err := Publish(ctx, tc.opts)
+			err := Publish(ctx, tc.path, tc.ref, tc.opts)
 			require.NoError(t, err)
 
 			// We want to pull the package and sure the content is the same as the local package
-			pkgLayout, err := layout2.LoadFromTar(ctx, tc.opts.Path, layout2.PackageLayoutOptions{})
+			pkgLayout, err := layout2.LoadFromTar(ctx, tc.path, layout2.PackageLayoutOptions{})
 			require.NoError(t, err)
 			// Format url and instantiate remote
-			ref, err := zoci.ReferenceFromMetadata(tc.opts.Registry.String(), &pkgLayout.Pkg.Metadata, &pkgLayout.Pkg.Build)
+			ref, err := zoci.ReferenceFromMetadata(tc.ref.String(), &pkgLayout.Pkg.Metadata, &pkgLayout.Pkg.Build)
 			require.NoError(t, err)
 
 			// FIXME(mkcp): This failed on "could not fetch image index, not found" given the same ref
@@ -176,7 +181,7 @@ func TestPublishPackage(t *testing.T) {
 			_, err = pullOCI(context.Background(), ref, tarPath, "", filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
 			require.NoError(t, err)
 
-			b1, err := os.ReadFile(tc.opts.Path)
+			b1, err := os.ReadFile(tc.path)
 			require.NoError(t, err)
 			sum1 := sha256.Sum256(b1)
 
