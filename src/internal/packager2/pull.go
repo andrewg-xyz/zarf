@@ -28,6 +28,7 @@ import (
 	"github.com/zarf-dev/zarf/src/pkg/zoci"
 )
 
+// TODO: Add options struct
 // Pull fetches the Zarf package from the given sources.
 func Pull(ctx context.Context, src, dir, shasum, architecture string, filter filters.ComponentFilterStrategy, publicKeyPath string, skipSignatureValidation bool) error {
 	u, err := url.Parse(src)
@@ -112,6 +113,7 @@ func pullOCI(ctx context.Context, src, tarPath, shasum, architecture string, fil
 	if shasum != "" {
 		src = fmt.Sprintf("%s@sha256:%s", src, shasum)
 	}
+	// TODO use layout.NewRemote and create layout.Pull
 	remote, err := zoci.NewRemote(ctx, src, oci.PlatformForArch(architecture), mods...)
 	if err != nil {
 		return false, err

@@ -106,6 +106,8 @@ func TestPublishSkeleton(t *testing.T) {
 			var expectedPkg v1alpha1.ZarfPackage
 			err = goyaml.Unmarshal(data, &expectedPkg)
 			require.NoError(t, err)
+			// Publish creates a local oci manifest file using the package name, delete this to clean up test name
+			defer os.Remove(expectedPkg.Metadata.Name)
 
 			// Format url and instantiate remote
 			ref, err := zoci.ReferenceFromMetadata(registryRef.String(), &expectedPkg.Metadata, &expectedPkg.Build)
@@ -165,6 +167,8 @@ func TestPublishPackage(t *testing.T) {
 			// We want to pull the package and sure the content is the same as the local package
 			layoutExpected, err := layout2.LoadFromTar(ctx, tc.path, layout2.PackageLayoutOptions{})
 			require.NoError(t, err)
+			// Publish creates a local oci manifest file using the package name, delete this to clean up test name
+			defer os.Remove(layoutExpected.Pkg.Metadata.Name)
 			// Format url and instantiate remote
 			packageRef, err := zoci.ReferenceFromMetadata(registryRef.String(), &layoutExpected.Pkg.Metadata, &layoutExpected.Pkg.Build)
 			require.NoError(t, err)

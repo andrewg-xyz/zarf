@@ -35,9 +35,6 @@ type PublishOpts struct {
 // package tarball, oci reference, or skeleton package to the registry.
 func Publish(ctx context.Context, path string, ref registry.Reference, opts PublishOpts) error {
 	l := logger.From(ctx)
-	// TODO: check linter for packager2
-	// TODO: should we be using packager2 oci NewRemote and Push instead of zoci?
-	// If so, do we need to implement a layout2.Copy function?
 	// TODO: determine if the source is an OCI reference and a zoci.CopyPackage() is required
 	// TODO: can you copy to and from the same registry?
 
