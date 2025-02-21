@@ -79,7 +79,6 @@ func TestPublishSkeleton(t *testing.T) {
 			path: "testdata/skeleton",
 			opts: PublishOpts{
 				WithPlainHTTP: true,
-				IsSkeleton:    true,
 			},
 		},
 	}
@@ -97,7 +96,7 @@ func TestPublishSkeleton(t *testing.T) {
 			}
 
 			// Publish test package
-			err = Publish(ctx, tc.path, registryRef, tc.opts)
+			err = PublishSkeleton(ctx, tc.path, registryRef, tc.opts)
 			require.NoError(t, err)
 
 			// Read and unmarshall expected
