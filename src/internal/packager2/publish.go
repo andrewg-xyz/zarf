@@ -6,13 +6,15 @@ package packager2
 import (
 	"context"
 	"fmt"
+
 	"github.com/defenseunicorns/pkg/helpers/v2"
+	"github.com/zarf-dev/zarf/src/config"
 	"github.com/zarf-dev/zarf/src/pkg/logger"
 	"github.com/zarf-dev/zarf/src/pkg/zoci"
 
 	"github.com/defenseunicorns/pkg/oci"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	layout2 "github.com/zarf-dev/zarf/src/internal/packager2/layout"
+
 	// "github.com/zarf-dev/zarf/src/pkg/layout"
 	"oras.land/oras-go/v2/registry"
 )
@@ -31,18 +33,20 @@ type PublishOpts struct {
 	WithPlainHTTP bool
 	// PublicKeyPath validates the create time signage of a package.
 	PublicKeyPath string
+	// Architecture is the architecture we are publishing to
+	Architecture string
 }
 
 // Publish takes a Path to the location of the build package, a ref to a registry, and a PublishOpts and uploads the
 // package tarball, oci reference, or skeleton package to the registry.
-func Publish(ctx context.Context, path string, ref registry.Reference, opts PublishOpts) error {
+func Publish(ctx context.Context, path string, dst registry.Reference, opts PublishOpts) error {
 	l := logger.From(ctx)
 	// TODO: determine if the source is an OCI reference and a zoci.CopyPackage() is required
 	// TODO: can you copy to and from the same registry?
 
 	// Validate inputs
 	l.Debug("validating PublishOpts")
-	if err := ref.ValidateRegistry(); err != nil {
+	if err := dst.ValidateRegistry(); err != nil {
 		return fmt.Errorf("invalid registry: %w", err)
 	}
 	if path == "" {
@@ -51,19 +55,22 @@ func Publish(ctx context.Context, path string, ref registry.Reference, opts Publ
 
 	// If path is remote copy oci to oci
 	if helpers.IsOCIURL(path) {
+		// TODO do shas work?
 		srcRef, err := registry.ParseReference(path)
 		if err != nil {
 			return fmt.Errorf("failed to parse path, path=%s: %w", path, err)
 		}
+		arch := config.GetArch(opts.Architecture)
+
+		p := oci.PlatformForArch(arch)
 
 		// Set up remote repo client
-		rem, err := layout2.NewRemote(ctx, srcRef, p, oci.WithPlainHTTP(plainHTTP))
+		src, err := zoci.NewRemote(ctx, srcRef.String(), p, oci.WithPlainHTTP(opts.WithPlainHTTP))
 		if err != nil {
 			return fmt.Errorf("could not instantiate remote: %w", err)
 		}
-		src := path.(Remote)
 
-		dst, err := zoci.NewRemote(ctx, ref.String(), dstPlat, oci.WithPlainHTTP(opts.WithPlainHTTP))
+		dst, err := zoci.NewRemote(ctx, dst.String(), p, oci.WithPlainHTTP(opts.WithPlainHTTP))
 		if err != nil {
 			return fmt.Errorf("could not instantiate remote: %w", err)
 		}
@@ -86,7 +93,7 @@ func Publish(ctx context.Context, path string, ref registry.Reference, opts Publ
 		return fmt.Errorf("unable to load package: %w", err)
 	}
 
-	return pushToRemote(ctx, pkgLayout, ref, opts.Concurrency, opts.WithPlainHTTP)
+	return pushToRemote(ctx, pkgLayout, dst, opts.Concurrency, opts.WithPlainHTTP)
 }
 
 // PublishSkeletonOpts declares the parameters to publish a skeleton package.
@@ -154,10 +161,7 @@ func pushToRemote(ctx context.Context, layout *layout2.PackageLayout, ref regist
 
 	arch := layout.Pkg.Metadata.Architecture
 	// Set platform
-	p := ocispec.Platform{
-		OS:           oci.MultiOS,
-		Architecture: arch,
-	}
+	p := oci.PlatformForArch(arch)
 
 	// Set up remote repo client
 	rem, err := layout2.NewRemote(ctx, r, p, oci.WithPlainHTTP(plainHTTP))
