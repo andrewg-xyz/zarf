@@ -74,12 +74,12 @@ func TestPublishSkeleton(t *testing.T) {
 	tt := []struct {
 		name string
 		path string
-		opts PublishOpts
+		opts PublishSkeletonOpts
 	}{
 		{
 			name: "Publish skeleton package",
 			path: "testdata/skeleton",
-			opts: PublishOpts{
+			opts: PublishSkeletonOpts{
 				WithPlainHTTP: true,
 			},
 		},
