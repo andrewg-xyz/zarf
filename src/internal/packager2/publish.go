@@ -6,7 +6,9 @@ package packager2
 import (
 	"context"
 	"fmt"
+	"github.com/defenseunicorns/pkg/helpers/v2"
 	"github.com/zarf-dev/zarf/src/pkg/logger"
+	"github.com/zarf-dev/zarf/src/pkg/zoci"
 
 	"github.com/defenseunicorns/pkg/oci"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -45,6 +47,32 @@ func Publish(ctx context.Context, path string, ref registry.Reference, opts Publ
 	}
 	if path == "" {
 		return fmt.Errorf("path must be specified")
+	}
+
+	// If path is remote copy oci to oci
+	if helpers.IsOCIURL(path) {
+		srcRef, err := registry.ParseReference(path)
+		if err != nil {
+			return fmt.Errorf("failed to parse path, path=%s: %w", path, err)
+		}
+
+		// Set up remote repo client
+		rem, err := layout2.NewRemote(ctx, srcRef, p, oci.WithPlainHTTP(plainHTTP))
+		if err != nil {
+			return fmt.Errorf("could not instantiate remote: %w", err)
+		}
+		src := path.(Remote)
+
+		dst, err := zoci.NewRemote(ctx, ref.String(), dstPlat, oci.WithPlainHTTP(opts.WithPlainHTTP))
+		if err != nil {
+			return fmt.Errorf("could not instantiate remote: %w", err)
+		}
+		err = zoci.CopyPackage(ctx, src, dst, opts.Concurrency)
+		if err != nil {
+			return fmt.Errorf("could not copy package: %w", err)
+		}
+
+		return nil
 	}
 
 	// Load package layout
@@ -116,6 +144,7 @@ func PublishSkeleton(ctx context.Context, path string, ref registry.Reference, o
 	return pushToRemote(ctx, pkgLayout, ref, opts.Concurrency, opts.WithPlainHTTP)
 }
 
+// pushToRemote pushes a package to a remote at ref.
 func pushToRemote(ctx context.Context, layout *layout2.PackageLayout, ref registry.Reference, concurrency int, plainHTTP bool) error {
 	// Build Reference for remote from registry location and pkg
 	r, err := layout2.ReferenceFromMetadata(ref.String(), layout.Pkg)
