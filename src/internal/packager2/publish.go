@@ -50,7 +50,7 @@ func Publish(ctx context.Context, path string, ref registry.Reference, opts Publ
 	// Load package layout
 	l.Info("loading package", "path", path)
 	layoutOpts := layout2.PackageLayoutOptions{
-		PublicKeyPath: opts.PublicKeyPath,
+		PublicKeyPath:           opts.PublicKeyPath,
 		SkipSignatureValidation: opts.SkipSignatureValidation,
 	}
 	pkgLayout, err := layout2.LoadFromTar(ctx, path, layoutOpts)
@@ -69,8 +69,6 @@ type PublishSkeletonOpts struct {
 	SigningKeyPath string
 	// SigningKeyPassword holds a password to use the key at SigningKeyPath.
 	SigningKeyPassword string
-	// SkipSignatureValidation flags whether Publish should skip validating the signature.
-	SkipSignatureValidation bool
 	// WithPlainHTTP falls back to plain HTTP for the registry calls instead of TLS.
 	WithPlainHTTP bool
 }
@@ -106,7 +104,7 @@ func PublishSkeleton(ctx context.Context, path string, ref registry.Reference, o
 
 	// Generate partial layout from buildpath
 	layoutOpts := layout2.PackageLayoutOptions{
-		SkipSignatureValidation: opts.SkipSignatureValidation,
+		SkipSignatureValidation: true,
 		// TODO: define what IsPartial purpose is in code docs
 		IsPartial: true,
 	}
