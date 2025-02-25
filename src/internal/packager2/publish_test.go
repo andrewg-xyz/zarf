@@ -21,7 +21,9 @@ import (
 	"github.com/zarf-dev/zarf/src/pkg/packager/filters"
 	"github.com/zarf-dev/zarf/src/pkg/zoci"
 	"github.com/zarf-dev/zarf/src/test/testutil"
+	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/registry"
+	"oras.land/oras-go/v2/registry/remote"
 )
 
 func TestPublishError(t *testing.T) {
@@ -231,7 +233,16 @@ func TestPublishCopy(t *testing.T) {
 				Repository: "my-namespace",
 			}
 
-			src := fmt.Sprintf("oci://%s/%s", registryRef.String(), "test:0.0.1@sha256:7b07835ce49cd2626854a2918c940678d9e1bbfc4c807cfd7b7d6447b76a2c67")
+			// This gets the Image index digest for the package publish
+			localRepo := &remote.Repository{PlainHTTP: true}
+			ociSrc := fmt.Sprintf("%s/%s", registryRef.String(), "test:0.0.1")
+			localRepo.Reference, err = registry.ParseReference(ociSrc)
+			require.NoError(t, err)
+			resolveOpts := oras.ResolveOptions{
+			}
+			indexDesc, err := oras.Resolve(ctx, localRepo, ociSrc, resolveOpts)
+			require.NoError(t, err)
+			src := fmt.Sprintf("oci://%s/%s@%s", registryRef.String(), "test:0.0.1", indexDesc.Digest)
 
 			// Publish test package
 			err = Publish(ctx, src, dstRegistryRef, tc.opts)
