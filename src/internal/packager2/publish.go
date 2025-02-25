@@ -6,6 +6,7 @@ package packager2
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/defenseunicorns/pkg/helpers/v2"
 	"github.com/zarf-dev/zarf/src/config"
@@ -56,10 +57,19 @@ func Publish(ctx context.Context, path string, dst registry.Reference, opts Publ
 	// If path is remote copy oci to oci
 	if helpers.IsOCIURL(path) {
 		// TODO do shas work?
-		srcRef, err := registry.ParseReference(path)
+
+		trimmed := strings.TrimPrefix(path, "oci://")
+
+		srcRef, err := registry.ParseReference(trimmed)
 		if err != nil {
 			return fmt.Errorf("failed to parse path, path=%s: %w", path, err)
 		}
+
+		// parts := strings.Split(srcRemote.Repo().Reference.Repository, "/")
+		// packageName := parts[len(parts)-1]
+
+		// p.cfg.PublishOpts.PackageDestination = p.cfg.PublishOpts.PackageDestination + "/" + packageName
+
 		arch := config.GetArch(opts.Architecture)
 
 		p := oci.PlatformForArch(arch)

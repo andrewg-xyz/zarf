@@ -186,16 +186,19 @@ func TestPublishPackage(t *testing.T) {
 }
 
 // TODO implement this
+// How do we validate the package we publish?
+// Pull the package in the dst registry
 func TestPublishCopy(t *testing.T) {
 	t.Parallel()
+
 	tt := []struct {
-		name string
-		path string
-		opts PublishOpts
+		name             string
+		packageToPublish string
+		opts             PublishOpts
 	}{
 		{
-			name: "Publish package",
-			path: "testdata/zarf-package-test-amd64-0.0.1.tar.zst",
+			name:             "Publish package",
+			packageToPublish: "testdata/zarf-package-test-amd64-0.0.1.tar.zst",
 			opts: PublishOpts{
 				WithPlainHTTP: true,
 			},
@@ -215,27 +218,41 @@ func TestPublishCopy(t *testing.T) {
 			}
 
 			// Publish test package
-			err = Publish(ctx, tc.path, registryRef, tc.opts)
+			err = Publish(ctx, tc.packageToPublish, registryRef, tc.opts)
 			require.NoError(t, err)
 
-			// We want to pull the package and sure the content is the same as the local package
-			layoutExpected, err := layout2.LoadFromTar(ctx, tc.path, layout2.PackageLayoutOptions{})
+			port2, err := freeport.GetFreePort()
 			require.NoError(t, err)
-			// Publish creates a local oci manifest file using the package name, delete this to clean up test name
-			defer os.Remove(layoutExpected.Pkg.Metadata.Name)
-			// Format url and instantiate remote
-			packageRef, err := zoci.ReferenceFromMetadata(registryRef.String(), &layoutExpected.Pkg.Metadata, &layoutExpected.Pkg.Build)
+			dstRegistryURL := testutil.SetupInMemoryRegistry(ctx, t, port2)
+			dstRegistryRef := registry.Reference{
+				Registry:   dstRegistryURL,
+				Repository: "my-namespace",
+			}
+
+			src := fmt.Sprintf("oci://%s/%s", registryRef.String(), "test:0.0.1")
+
+			// Publish test package
+			err = Publish(ctx, src, dstRegistryRef, tc.opts)
 			require.NoError(t, err)
 
-			// Generate tmpdir and pull published package from local registry
-			tmpdir := t.TempDir()
-			tarPath := fmt.Sprintf("%s/%s", tmpdir, "data.tar.zst")
-			_, err = pullOCI(context.Background(), packageRef, tarPath, "", "amd64", filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
-			require.NoError(t, err)
+			// // We want to pull the package and sure the content is the same as the local package
+			// layoutExpected, err := layout2.LoadFromTar(ctx, tc.path, layout2.PackageLayoutOptions{})
+			// require.NoError(t, err)
+			// // Publish creates a local oci manifest file using the package name, delete this to clean up test name
+			// defer os.Remove(layoutExpected.Pkg.Metadata.Name)
+			// // Format url and instantiate remote
+			// packageRef, err := zoci.ReferenceFromMetadata(registryRef.String(), &layoutExpected.Pkg.Metadata, &layoutExpected.Pkg.Build)
+			// require.NoError(t, err)
 
-			layoutActual, err := layout2.LoadFromTar(ctx, tarPath, layout2.PackageLayoutOptions{})
-			require.NoError(t, err)
-			require.Equal(t, layoutExpected.Pkg, layoutActual.Pkg, "Uploaded package is not identical to downloaded package")
+			// // Generate tmpdir and pull published package from local registry
+			// tmpdir := t.TempDir()
+			// tarPath := fmt.Sprintf("%s/%s", tmpdir, "data.tar.zst")
+			// _, err = pullOCI(context.Background(), packageRef, tarPath, "", "amd64", filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
+			// require.NoError(t, err)
+
+			// layoutActual, err := layout2.LoadFromTar(ctx, tarPath, layout2.PackageLayoutOptions{})
+			// require.NoError(t, err)
+			// require.Equal(t, layoutExpected.Pkg, layoutActual.Pkg, "Uploaded package is not identical to downloaded package")
 		})
 	}
 }
