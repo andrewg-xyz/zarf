@@ -6,6 +6,7 @@ package packager2
 import (
 	"context"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"strings"
 
 	"github.com/defenseunicorns/pkg/helpers/v2"
@@ -58,20 +59,20 @@ func Publish(ctx context.Context, path string, dst registry.Reference, opts Publ
 	if helpers.IsOCIURL(path) {
 		// TODO do shas work?
 
+		// Build srcRef
 		trimmed := strings.TrimPrefix(path, "oci://")
-
 		srcRef, err := registry.ParseReference(trimmed)
 		if err != nil {
 			return fmt.Errorf("failed to parse path, path=%s: %w", path, err)
 		}
 
-		// parts := strings.Split(srcRemote.Repo().Reference.Repository, "/")
-		// packageName := parts[len(parts)-1]
+		// Extract packageName from src and build dstUrl for dst remote
+		parts := strings.Split(srcRef.String(), "/")
+		packageName := parts[len(parts)-1]
+		dstUrl := dst.String() + "/" + packageName
 
-		// p.cfg.PublishOpts.PackageDestination = p.cfg.PublishOpts.PackageDestination + "/" + packageName
-
+		// Build platform
 		arch := config.GetArch(opts.Architecture)
-
 		p := oci.PlatformForArch(arch)
 
 		// Set up remote repo client
@@ -79,12 +80,14 @@ func Publish(ctx context.Context, path string, dst registry.Reference, opts Publ
 		if err != nil {
 			return fmt.Errorf("could not instantiate remote: %w", err)
 		}
-
-		dst, err := zoci.NewRemote(ctx, dst.String(), p, oci.WithPlainHTTP(opts.WithPlainHTTP))
+		dstRem, err := zoci.NewRemote(ctx, dstUrl, p, oci.WithPlainHTTP(opts.WithPlainHTTP))
 		if err != nil {
 			return fmt.Errorf("could not instantiate remote: %w", err)
 		}
-		err = zoci.CopyPackage(ctx, src, dst, opts.Concurrency)
+
+		// Execute copy
+		spew.Dump(src.Repo().Reference, dstRem.Repo().Reference)
+		err = zoci.CopyPackage(ctx, src, dstRem, opts.Concurrency)
 		if err != nil {
 			return fmt.Errorf("could not copy package: %w", err)
 		}

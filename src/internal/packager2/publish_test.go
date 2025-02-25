@@ -201,6 +201,7 @@ func TestPublishCopy(t *testing.T) {
 			packageToPublish: "testdata/zarf-package-test-amd64-0.0.1.tar.zst",
 			opts: PublishOpts{
 				WithPlainHTTP: true,
+				Architecture:  "amd64",
 			},
 		},
 	}
