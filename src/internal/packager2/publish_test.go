@@ -238,9 +238,7 @@ func TestPublishCopy(t *testing.T) {
 			ociSrc := fmt.Sprintf("%s/%s", registryRef.String(), "test:0.0.1")
 			localRepo.Reference, err = registry.ParseReference(ociSrc)
 			require.NoError(t, err)
-			resolveOpts := oras.ResolveOptions{
-			}
-			indexDesc, err := oras.Resolve(ctx, localRepo, ociSrc, resolveOpts)
+			indexDesc, err := oras.Resolve(ctx, localRepo, ociSrc, oras.ResolveOptions{})
 			require.NoError(t, err)
 			src := fmt.Sprintf("oci://%s/%s@%s", registryRef.String(), "test:0.0.1", indexDesc.Digest)
 
