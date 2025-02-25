@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/davecgh/go-spew/spew"
-
 	"github.com/defenseunicorns/pkg/helpers/v2"
 	"github.com/zarf-dev/zarf/src/config"
 	"github.com/zarf-dev/zarf/src/pkg/logger"
@@ -87,7 +85,6 @@ func Publish(ctx context.Context, path string, dst registry.Reference, opts Publ
 		}
 
 		// Execute copy
-		spew.Dump(src.Repo().Reference, dstRem.Repo().Reference)
 		err = zoci.CopyPackage(ctx, src, dstRem, opts.Concurrency)
 		if err != nil {
 			return fmt.Errorf("could not copy package: %w", err)

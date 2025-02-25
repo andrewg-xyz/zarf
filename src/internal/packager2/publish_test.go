@@ -237,24 +237,24 @@ func TestPublishCopy(t *testing.T) {
 			err = Publish(ctx, src, dstRegistryRef, tc.opts)
 			require.NoError(t, err)
 
-			// // We want to pull the package and sure the content is the same as the local package
-			// layoutExpected, err := layout2.LoadFromTar(ctx, tc.path, layout2.PackageLayoutOptions{})
-			// require.NoError(t, err)
-			// // Publish creates a local oci manifest file using the package name, delete this to clean up test name
-			// defer os.Remove(layoutExpected.Pkg.Metadata.Name)
-			// // Format url and instantiate remote
-			// packageRef, err := zoci.ReferenceFromMetadata(registryRef.String(), &layoutExpected.Pkg.Metadata, &layoutExpected.Pkg.Build)
-			// require.NoError(t, err)
+			// We want to pull the package and sure the content is the same as the local package
+			layoutExpected, err := layout2.LoadFromTar(ctx, tc.packageToPublish, layout2.PackageLayoutOptions{})
+			require.NoError(t, err)
+			// Publish creates a local oci manifest file using the package name, delete this to clean up test name
+			defer os.Remove(layoutExpected.Pkg.Metadata.Name)
+			// Format url and instantiate remote
+			packageRef, err := zoci.ReferenceFromMetadata(dstRegistryRef.String(), &layoutExpected.Pkg.Metadata, &layoutExpected.Pkg.Build)
+			require.NoError(t, err)
 
-			// // Generate tmpdir and pull published package from local registry
-			// tmpdir := t.TempDir()
-			// tarPath := fmt.Sprintf("%s/%s", tmpdir, "data.tar.zst")
-			// _, err = pullOCI(context.Background(), packageRef, tarPath, "", "amd64", filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
-			// require.NoError(t, err)
+			// Generate tmpdir and pull published package from local registry
+			tmpdir := t.TempDir()
+			tarPath := fmt.Sprintf("%s/%s", tmpdir, "data.tar.zst")
+			_, err = pullOCI(context.Background(), packageRef, tarPath, "", "amd64", filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
+			require.NoError(t, err)
 
-			// layoutActual, err := layout2.LoadFromTar(ctx, tarPath, layout2.PackageLayoutOptions{})
-			// require.NoError(t, err)
-			// require.Equal(t, layoutExpected.Pkg, layoutActual.Pkg, "Uploaded package is not identical to downloaded package")
+			layoutActual, err := layout2.LoadFromTar(ctx, tarPath, layout2.PackageLayoutOptions{})
+			require.NoError(t, err)
+			require.Equal(t, layoutExpected.Pkg, layoutActual.Pkg, "Uploaded package is not identical to downloaded package")
 		})
 	}
 }
