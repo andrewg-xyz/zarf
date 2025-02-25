@@ -202,6 +202,7 @@ func TestPublishCopy(t *testing.T) {
 			opts: PublishOpts{
 				WithPlainHTTP: true,
 				Architecture:  "amd64",
+				Concurrency: 3,
 			},
 		},
 	}

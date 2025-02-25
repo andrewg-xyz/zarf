@@ -6,8 +6,9 @@ package packager2
 import (
 	"context"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"strings"
+
+	"github.com/davecgh/go-spew/spew"
 
 	"github.com/defenseunicorns/pkg/helpers/v2"
 	"github.com/zarf-dev/zarf/src/config"
