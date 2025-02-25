@@ -202,7 +202,7 @@ func TestPublishCopy(t *testing.T) {
 			opts: PublishOpts{
 				WithPlainHTTP: true,
 				Architecture:  "amd64",
-				Concurrency: 3,
+				Concurrency:   3,
 			},
 		},
 	}
@@ -231,7 +231,7 @@ func TestPublishCopy(t *testing.T) {
 				Repository: "my-namespace",
 			}
 
-			src := fmt.Sprintf("oci://%s/%s", registryRef.String(), "test:0.0.1")
+			src := fmt.Sprintf("oci://%s/%s", registryRef.String(), "test:0.0.1@sha256:7b07835ce49cd2626854a2918c940678d9e1bbfc4c807cfd7b7d6447b76a2c67")
 
 			// Publish test package
 			err = Publish(ctx, src, dstRegistryRef, tc.opts)
