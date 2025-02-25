@@ -187,10 +187,7 @@ func TestPublishPackage(t *testing.T) {
 	}
 }
 
-// TODO implement this
-// How do we validate the package we publish?
-// Pull the package in the dst registry
-func TestPublishCopy(t *testing.T) {
+func TestPublishCopySHA(t *testing.T) {
 	t.Parallel()
 
 	tt := []struct {
@@ -241,6 +238,88 @@ func TestPublishCopy(t *testing.T) {
 			indexDesc, err := oras.Resolve(ctx, localRepo, ociSrc, oras.ResolveOptions{})
 			require.NoError(t, err)
 			src := fmt.Sprintf("oci://%s/%s@%s", registryRef.String(), "test:0.0.1", indexDesc.Digest)
+
+			// Publish test package
+			err = Publish(ctx, src, dstRegistryRef, tc.opts)
+			require.NoError(t, err)
+
+			// We want to pull the package and sure the content is the same as the local package
+			layoutExpected, err := layout2.LoadFromTar(ctx, tc.packageToPublish, layout2.PackageLayoutOptions{})
+			require.NoError(t, err)
+			// Publish creates a local oci manifest file using the package name, delete this to clean up test name
+			defer os.Remove(layoutExpected.Pkg.Metadata.Name)
+			// Format url and instantiate remote
+			packageRef, err := zoci.ReferenceFromMetadata(dstRegistryRef.String(), &layoutExpected.Pkg.Metadata, &layoutExpected.Pkg.Build)
+			require.NoError(t, err)
+
+			fmt.Println(packageRef)
+
+			pkgRefsha := fmt.Sprintf("%s@%s", packageRef, indexDesc.Digest)
+
+			// Generate tmpdir and pull published package from local registry
+			tmpdir := t.TempDir()
+			tarPath := fmt.Sprintf("%s/%s", tmpdir, "data.tar.zst")
+			_, err = pullOCI(context.Background(), pkgRefsha, tarPath, "", "amd64", filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
+			require.NoError(t, err)
+
+			layoutActual, err := layout2.LoadFromTar(ctx, tarPath, layout2.PackageLayoutOptions{})
+			require.NoError(t, err)
+			require.Equal(t, layoutExpected.Pkg, layoutActual.Pkg, "Uploaded package is not identical to downloaded package")
+		})
+	}
+}
+
+func TestPublishCopyTag(t *testing.T) {
+	t.Parallel()
+
+	tt := []struct {
+		name             string
+		packageToPublish string
+		opts             PublishOpts
+	}{
+		{
+			name:             "Publish package",
+			packageToPublish: "testdata/zarf-package-test-amd64-0.0.1.tar.zst",
+			opts: PublishOpts{
+				WithPlainHTTP: true,
+				Architecture:  "amd64",
+				Concurrency:   3,
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			// file write is happening during publish oras.PackManifest, we should replace defer remove that
+			ctx := testutil.TestContext(t)
+			port, err := freeport.GetFreePort()
+			require.NoError(t, err)
+			registryURL := testutil.SetupInMemoryRegistry(ctx, t, port)
+			registryRef := registry.Reference{
+				Registry:   registryURL,
+				Repository: "my-namespace",
+			}
+
+			// Publish test package
+			err = Publish(ctx, tc.packageToPublish, registryRef, tc.opts)
+			require.NoError(t, err)
+
+			port2, err := freeport.GetFreePort()
+			require.NoError(t, err)
+			dstRegistryURL := testutil.SetupInMemoryRegistry(ctx, t, port2)
+			dstRegistryRef := registry.Reference{
+				Registry:   dstRegistryURL,
+				Repository: "my-namespace",
+			}
+
+			// // This gets the Image index digest for the package publish
+			// localRepo := &remote.Repository{PlainHTTP: true}
+			// ociSrc := fmt.Sprintf("%s/%s", registryRef.String(), "test:0.0.1")
+			// localRepo.Reference, err = registry.ParseReference(ociSrc)
+			// require.NoError(t, err)
+			// indexDesc, err := oras.Resolve(ctx, localRepo, ociSrc, oras.ResolveOptions{})
+			// require.NoError(t, err)
+			src := fmt.Sprintf("oci://%s/%s", registryRef.String(), "test:0.0.1")
 
 			// Publish test package
 			err = Publish(ctx, src, dstRegistryRef, tc.opts)
