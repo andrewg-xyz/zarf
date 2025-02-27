@@ -16,7 +16,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/docker/cli/cli/command"
@@ -90,16 +89,7 @@ func getDockerEndpointHost() (string, error) {
 // Pull pulls all images from the given config.
 func Pull(ctx context.Context, cfg PullConfig) (map[transform.Image]v1.Image, error) {
 	l := logger.From(ctx)
-	var longer string
 	pullStart := time.Now()
-
-	imageCount := len(cfg.ImageList)
-	// Give some additional user feedback on larger image sets
-	if imageCount > 15 {
-		longer = "This step may take a couple of minutes to complete."
-	} else if imageCount > 5 {
-		longer = "This step may take several seconds to complete."
-	}
 
 	if err := helpers.CreateDirectory(cfg.DestinationDirectory, helpers.ReadExecuteAllWriteUser); err != nil {
 		return nil, fmt.Errorf("failed to create image path %s: %w", cfg.DestinationDirectory, err)
@@ -110,12 +100,18 @@ func Pull(ctx context.Context, cfg PullConfig) (map[transform.Image]v1.Image, er
 		return nil, err
 	}
 
-	// Give some additional user feedback on larger image sets
 	imageFetchStart := time.Now()
-	// TODO(mkcp): Remove message on logger release
-	spinner := message.NewProgressSpinner("Fetching info for %d images. %s", imageCount, longer)
-	defer spinner.Stop()
+	// Give some additional user feedback on larger image sets
+	imageCount := len(cfg.ImageList)
 	l.Info("fetching info for images", "count", imageCount, "destination", cfg.DestinationDirectory)
+	switch {
+	case imageCount > 15:
+		l.Warn("This step may take a couple of minutes to complete.")
+		break
+	case imageCount > 5:
+		l.Warn("This step may take several seconds to complete.")
+		break
+	}
 
 	logs.Warn.SetOutput(&message.DebugWriter{})
 	logs.Progress.SetOutput(&message.DebugWriter{})
@@ -129,16 +125,12 @@ func Pull(ctx context.Context, cfg PullConfig) (map[transform.Image]v1.Image, er
 
 	fetched := map[transform.Image]v1.Image{}
 
-	var counter, totalBytes atomic.Int64
 	var dockerEndPointHost string
 
 	// Spawn a goroutine for each
 	for _, refInfo := range cfg.ImageList {
 		refInfo := refInfo
 		eg.Go(func() error {
-			idx := counter.Add(1)
-			// TODO(mkcp): Remove message on logger release
-			spinner.Updatef("Fetching image info (%d of %d)", idx, imageCount)
 			l.Debug("fetching image info", "name", refInfo.Name)
 
 			ref := refInfo.Reference
@@ -168,8 +160,6 @@ func Pull(ctx context.Context, cfg PullConfig) (map[transform.Image]v1.Image, er
 						return fmt.Errorf("rate limited by registry: %w", err)
 					}
 
-					// TODO(mkcp): Remove message on logger release
-					message.Warnf("Falling back to local 'docker', failed to find the manifest on a remote: %s", err.Error())
 					l.Warn("Falling back to local 'docker', failed to find the manifest on a remote", "error", err.Error())
 
 					if dockerEndPointHost == "" {
@@ -197,9 +187,9 @@ func Pull(ctx context.Context, cfg PullConfig) (map[transform.Image]v1.Image, er
 
 					// Warn the user if the image is large.
 					if rawImg.Size > 750*1000*1000 {
-						message.Warnf("%s is %s and may take a very long time to load via docker. "+
-							"See https://docs.zarf.dev/faq for suggestions on how to improve large local image loading operations.",
-							ref, utils.ByteFormat(float64(rawImg.Size), 2))
+						l.Warn("ref is large and may take a very long time to load via docker. See https://docs.zarf.dev/faq for suggestions on how to improve large local image loading operations.",
+							"ref", ref,
+							"size", utils.ByteFormat(float64(rawImg.Size), 2))
 					}
 
 					// Use unbuffered opener to avoid OOM Kill issues https://github.com/zarf-dev/zarf/issues/1214.
@@ -227,12 +217,6 @@ func Pull(ctx context.Context, cfg PullConfig) (map[transform.Image]v1.Image, er
 			if cacheImg && cfg.CacheDirectory != "" {
 				img = cache.Image(img, cache.NewFilesystemCache(cfg.CacheDirectory))
 			}
-
-			size, err := getSizeOfImage(img)
-			if err != nil {
-				return fmt.Errorf("failed to get size of image: %w", err)
-			}
-			totalBytes.Add(size)
 
 			layers, err := img.Layers()
 			if err != nil {
@@ -266,14 +250,9 @@ func Pull(ctx context.Context, cfg PullConfig) (map[transform.Image]v1.Image, er
 		return nil, err
 	}
 
-	// TODO(mkcp): Remove message on logger release
-	spinner.Successf("Fetched info for %d images", imageCount)
 	l.Debug("done fetching info for images", "count", len(cfg.ImageList), "duration", time.Since(imageFetchStart))
 
 	doneSaving := make(chan error)
-	updateText := fmt.Sprintf("Pulling %d images", imageCount)
-	// TODO(mkcp): Remove progress bar on logger release
-	go utils.RenderProgressBarForLocalDirWrite(cfg.DestinationDirectory, totalBytes.Load(), doneSaving, updateText, updateText)
 	l.Info("pulling images", "count", len(cfg.ImageList))
 
 	toPull := maps.Clone(fetched)
