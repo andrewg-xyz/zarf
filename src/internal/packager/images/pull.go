@@ -9,7 +9,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"log/slog"
 	"maps"
 	"os"
 	"path/filepath"
@@ -35,17 +37,15 @@ import (
 	clayout "github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/moby/moby/client"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/zarf-dev/zarf/src/pkg/message"
 	"github.com/zarf-dev/zarf/src/pkg/transform"
 	"github.com/zarf-dev/zarf/src/pkg/utils"
 	"golang.org/x/sync/errgroup"
 )
 
 func checkForIndex(refInfo transform.Image, desc *remote.Descriptor) error {
-	if refInfo.Digest != "" && desc != nil && types.MediaType(desc.MediaType).IsIndex() {
+	if refInfo.Digest != "" && desc != nil && desc.MediaType.IsIndex() {
 		var idx v1.IndexManifest
 		if err := json.Unmarshal(desc.Manifest, &idx); err != nil {
 			return fmt.Errorf("unable to unmarshal index.json: %w", err)
@@ -113,8 +113,8 @@ func Pull(ctx context.Context, cfg PullConfig) (map[transform.Image]v1.Image, er
 		break
 	}
 
-	logs.Warn.SetOutput(&message.DebugWriter{})
-	logs.Progress.SetOutput(&message.DebugWriter{})
+	logs.Warn.SetOutput(warnWriter{l: l})
+	logs.Progress.SetOutput(progressWriter{l: l})
 
 	eg, ectx := errgroup.WithContext(ctx)
 	eg.SetLimit(10)
@@ -269,8 +269,6 @@ func Pull(ctx context.Context, cfg PullConfig) (map[transform.Image]v1.Image, er
 		retry.Attempts(2),
 	)
 	if err != nil {
-		// TODO(mkcp): Remove message on logger release
-		message.Warnf("Failed to save images in parallel, falling back to sequential save: %s", err.Error())
 		l.Warn("failed to save images in parallel, falling back to sequential save", "error", err.Error())
 		err = retry.Do(func() error {
 			saved, err := SaveSequential(ctx, cranePath, toPull, cfg.CacheDirectory)
@@ -413,7 +411,6 @@ func SaveSequential(ctx context.Context, cl clayout.Path, m map[transform.Image]
 		l.Info("saving image", "ref", info.Reference, "size", byteSize, "method", "sequential")
 		if err := cl.AppendImage(img, clayout.WithAnnotations(annotations)); err != nil {
 			if err := CleanupInProgressLayers(ctx, img, cacheDirectory); err != nil {
-				message.WarnErr(err, "failed to clean up in-progress layers, please run `zarf tools clear-cache`")
 				l.Error("failed to clean up in-progress layers. please run `zarf tools clear-cache`")
 			}
 			return saved, err
@@ -459,7 +456,6 @@ func SaveConcurrent(ctx context.Context, cl clayout.Path, m map[transform.Image]
 				l.Info("saving image", "ref", info.Reference, "size", byteSize, "method", "concurrent")
 				if err := cl.WriteImage(img); err != nil {
 					if err := CleanupInProgressLayers(ectx, img, cacheDirectory); err != nil {
-						message.WarnErr(err, "failed to clean up in-progress layers, please run `zarf tools clear-cache`")
 						l.Error("failed to clean up in-progress layers. please run `zarf tools clear-cache`")
 					}
 					return err
@@ -488,4 +484,26 @@ func SaveConcurrent(ctx context.Context, cl clayout.Path, m map[transform.Image]
 	}
 
 	return saved, eg.Wait()
+}
+
+var _ io.Writer = warnWriter{}
+
+// warnWriter wraps the current slog.Logger.Warn level into a Writer for go-containerregistry/pkg/logs
+// HACK(mkcp): Surely there's a better way to do this.
+type warnWriter struct{ l *slog.Logger }
+
+func (w warnWriter) Write(raw []byte) (int, error) {
+	w.l.Warn(string(raw))
+	return len(raw), nil
+}
+
+var _ io.Writer = progressWriter{}
+
+// progressWriter wraps the current slog.Logger.Info level into a Writer for go-containerregistry/pkg/logs
+// HACK(mkcp): Surely there's a better way to do this.
+type progressWriter struct{ l *slog.Logger }
+
+func (w progressWriter) Write(raw []byte) (int, error) {
+	w.l.Info(string(raw))
+	return len(raw), nil
 }
