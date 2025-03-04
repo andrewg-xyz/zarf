@@ -28,6 +28,34 @@ import (
 
 // TODO Freeport is not thread safe which means that for now none of the tests can be run in parallel
 
+func pullFromRemote(t *testing.T, ctx context.Context, packageRef string, architecture string) *layout2.PackageLayout {
+	t.Helper()
+
+	// Generate tmpdir and pull published package from local registry
+	tmpdir := t.TempDir()
+	tarPath := fmt.Sprintf("%s/%s", tmpdir, "data.tar.zst")
+	_, err := pullOCI(context.Background(), packageRef, tarPath, "", architecture, filters.Empty(), oci.WithPlainHTTP(true))
+	require.NoError(t, err)
+
+	layoutActual, err := layout2.LoadFromTar(ctx, tarPath, layout2.PackageLayoutOptions{})
+	require.NoError(t, err)
+
+	return layoutActual
+}
+
+func createRegistry(t *testing.T, ctx context.Context) registry.Reference {
+	// Setup destination registry
+	dstPort, err := freeport.GetFreePort()
+	require.NoError(t, err)
+	dstRegistryURL := testutil.SetupInMemoryRegistry(ctx, t, dstPort)
+	dstRegistryRef := registry.Reference{
+		Registry:   dstRegistryURL,
+		Repository: "my-namespace",
+	}
+
+	return dstRegistryRef
+}
+
 func TestPublishError(t *testing.T) {
 	// t.Parallel()
 	ctx := context.Background()
@@ -91,16 +119,10 @@ func TestPublishSkeleton(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := testutil.TestContext(t)
-			port, err := freeport.GetFreePort()
-			require.NoError(t, err)
-			registryURL := testutil.SetupInMemoryRegistry(ctx, t, port)
-			registryRef := registry.Reference{
-				Registry:   registryURL,
-				Repository: "my-namespace",
-			}
+			registryRef := createRegistry(t, ctx)
 
 			// Publish test package
-			err = PublishSkeleton(ctx, tc.path, registryRef, tc.opts)
+			err := PublishSkeleton(ctx, tc.path, registryRef, tc.opts)
 			require.NoError(t, err)
 
 			// Read and unmarshall expected
@@ -154,16 +176,10 @@ func TestPublishPackage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// file write is happening during publish oras.PackManifest, we should replace defer remove that
 			ctx := testutil.TestContext(t)
-			port, err := freeport.GetFreePort()
-			require.NoError(t, err)
-			registryURL := testutil.SetupInMemoryRegistry(ctx, t, port)
-			registryRef := registry.Reference{
-				Registry:   registryURL,
-				Repository: "my-namespace",
-			}
+			registryRef := createRegistry(t, ctx)
 
 			// Publish test package
-			err = Publish(ctx, tc.path, registryRef, tc.opts)
+			err := Publish(ctx, tc.path, registryRef, tc.opts)
 			require.NoError(t, err)
 
 			// We want to pull the package and sure the content is the same as the local package
@@ -175,14 +191,7 @@ func TestPublishPackage(t *testing.T) {
 			packageRef, err := zoci.ReferenceFromMetadata(registryRef.String(), &layoutExpected.Pkg.Metadata, &layoutExpected.Pkg.Build)
 			require.NoError(t, err)
 
-			// Generate tmpdir and pull published package from local registry
-			tmpdir := t.TempDir()
-			tarPath := fmt.Sprintf("%s/%s", tmpdir, "data.tar.zst")
-			_, err = pullOCI(context.Background(), packageRef, tarPath, "", "amd64", filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
-			require.NoError(t, err)
-
-			layoutActual, err := layout2.LoadFromTar(ctx, tarPath, layout2.PackageLayoutOptions{})
-			require.NoError(t, err)
+			layoutActual := pullFromRemote(t, ctx, packageRef, "amd64")
 			require.Equal(t, layoutExpected.Pkg, layoutActual.Pkg, "Uploaded package is not identical to downloaded package")
 		})
 	}
@@ -211,16 +220,10 @@ func TestPublishCopySHA(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// file write is happening during publish oras.PackManifest, we should replace defer remove that
 			ctx := testutil.TestContext(t)
-			port, err := freeport.GetFreePort()
-			require.NoError(t, err)
-			registryURL := testutil.SetupInMemoryRegistry(ctx, t, port)
-			registryRef := registry.Reference{
-				Registry:   registryURL,
-				Repository: "my-namespace",
-			}
+			registryRef := createRegistry(t, ctx)
 
 			// Publish test package
-			err = Publish(ctx, tc.packageToPublish, registryRef, tc.opts)
+			err := Publish(ctx, tc.packageToPublish, registryRef, tc.opts)
 			require.NoError(t, err)
 
 			// Setup destination registry
@@ -254,18 +257,9 @@ func TestPublishCopySHA(t *testing.T) {
 			packageRef, err := zoci.ReferenceFromMetadata(dstRegistryRef.String(), &layoutExpected.Pkg.Metadata, &layoutExpected.Pkg.Build)
 			require.NoError(t, err)
 
-			fmt.Println(packageRef)
-
 			pkgRefsha := fmt.Sprintf("%s@%s", packageRef, indexDesc.Digest)
 
-			// Generate tmpdir and pull published package from local registry
-			tmpdir := t.TempDir()
-			tarPath := fmt.Sprintf("%s/%s", tmpdir, "data.tar.zst")
-			_, err = pullOCI(context.Background(), pkgRefsha, tarPath, "", "amd64", filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
-			require.NoError(t, err)
-
-			layoutActual, err := layout2.LoadFromTar(ctx, tarPath, layout2.PackageLayoutOptions{})
-			require.NoError(t, err)
+			layoutActual := pullFromRemote(t, ctx, pkgRefsha, "amd64")
 			require.Equal(t, layoutExpected.Pkg, layoutActual.Pkg, "Uploaded package is not identical to downloaded package")
 		})
 	}
@@ -295,16 +289,10 @@ func TestPublishCopyTag(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// file write is happening during publish oras.PackManifest, we should replace defer remove that
 			ctx := testutil.TestContext(t)
-			port, err := freeport.GetFreePort()
-			require.NoError(t, err)
-			registryURL := testutil.SetupInMemoryRegistry(ctx, t, port)
-			registryRef := registry.Reference{
-				Registry:   registryURL,
-				Repository: "my-namespace",
-			}
+			registryRef := createRegistry(t, ctx)
 
 			// Publish test package
-			err = Publish(ctx, tc.packageToPublish, registryRef, tc.opts)
+			err := Publish(ctx, tc.packageToPublish, registryRef, tc.opts)
 			require.NoError(t, err)
 
 			port2, err := freeport.GetFreePort()
@@ -337,14 +325,8 @@ func TestPublishCopyTag(t *testing.T) {
 			packageRef, err := zoci.ReferenceFromMetadata(dstRegistryRef.String(), &layoutExpected.Pkg.Metadata, &layoutExpected.Pkg.Build)
 			require.NoError(t, err)
 
-			// Generate tmpdir and pull published package from local registry
-			tmpdir := t.TempDir()
-			tarPath := fmt.Sprintf("%s/%s", tmpdir, "data.tar.zst")
-			_, err = pullOCI(context.Background(), packageRef, tarPath, "", "amd64", filters.Empty(), oci.WithPlainHTTP(tc.opts.WithPlainHTTP))
-			require.NoError(t, err)
+			layoutActual := pullFromRemote(t, ctx, packageRef, "amd64")
 
-			layoutActual, err := layout2.LoadFromTar(ctx, tarPath, layout2.PackageLayoutOptions{})
-			require.NoError(t, err)
 			require.Equal(t, layoutExpected.Pkg, layoutActual.Pkg, "Uploaded package is not identical to downloaded package")
 		})
 	}
