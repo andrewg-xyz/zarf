@@ -270,7 +270,8 @@ func TestPublishCopySHA(t *testing.T) {
 }
 
 func TestPublishCopyTag(t *testing.T) {
-	t.Parallel()
+	// FIXME(mkcp): TestPublishCopy panics when running in parallel on test count 2 or higher.
+	// t.Parallel()
 
 	tt := []struct {
 		name             string
