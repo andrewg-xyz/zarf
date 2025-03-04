@@ -26,12 +26,13 @@ import (
 	"oras.land/oras-go/v2/registry/remote"
 )
 
+// TODO Freeport is not thread safe which means that for now none of the tests can be run in parallel
+
 func TestPublishError(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	ctx := context.Background()
 	lint.ZarfSchema = testutil.LoadSchema(t, "../../../zarf.schema.json")
 
-	// TODO add freeport
 	registryURL := testutil.SetupInMemoryRegistry(ctx, t, 5000)
 	defaultRef := registry.Reference{
 		Registry:   registryURL,
@@ -70,7 +71,7 @@ func TestPublishError(t *testing.T) {
 }
 
 func TestPublishSkeleton(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 	lint.ZarfSchema = testutil.LoadSchema(t, "../../../zarf.schema.json")
 
 	tt := []struct {
@@ -134,7 +135,7 @@ func TestPublishSkeleton(t *testing.T) {
 }
 
 func TestPublishPackage(t *testing.T) {
-	t.Parallel()
+
 	tt := []struct {
 		name string
 		path string
@@ -188,7 +189,7 @@ func TestPublishPackage(t *testing.T) {
 }
 
 func TestPublishCopySHA(t *testing.T) {
-	t.Parallel()
+	// t.Parallel()
 
 	tt := []struct {
 		name             string
@@ -222,15 +223,16 @@ func TestPublishCopySHA(t *testing.T) {
 			err = Publish(ctx, tc.packageToPublish, registryRef, tc.opts)
 			require.NoError(t, err)
 
-			port2, err := freeport.GetFreePort()
+			// Setup destination registry
+			dstPort, err := freeport.GetFreePort()
 			require.NoError(t, err)
-			dstRegistryURL := testutil.SetupInMemoryRegistry(ctx, t, port2)
+			dstRegistryURL := testutil.SetupInMemoryRegistry(ctx, t, dstPort)
 			dstRegistryRef := registry.Reference{
 				Registry:   dstRegistryURL,
 				Repository: "my-namespace",
 			}
 
-			// This gets the Image index digest for the package publish
+			// This gets the test package digest from the first package publish
 			localRepo := &remote.Repository{PlainHTTP: true}
 			ociSrc := fmt.Sprintf("%s/%s", registryRef.String(), "test:0.0.1")
 			localRepo.Reference, err = registry.ParseReference(ociSrc)
@@ -239,7 +241,7 @@ func TestPublishCopySHA(t *testing.T) {
 			require.NoError(t, err)
 			src := fmt.Sprintf("oci://%s/%s@%s", registryRef.String(), "test:0.0.1", indexDesc.Digest)
 
-			// Publish test package
+			// Publish test package to the destination registry
 			err = Publish(ctx, src, dstRegistryRef, tc.opts)
 			require.NoError(t, err)
 
