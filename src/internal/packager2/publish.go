@@ -56,7 +56,6 @@ func Publish(ctx context.Context, path string, dst registry.Reference, opts Publ
 
 	// If path is remote copy oci to oci
 	if helpers.IsOCIURL(path) {
-		// TODO do shas work?
 
 		// Build srcRef
 		trimmed := strings.TrimPrefix(path, "oci://")

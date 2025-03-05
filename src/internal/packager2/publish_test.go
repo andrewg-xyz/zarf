@@ -227,13 +227,7 @@ func TestPublishCopySHA(t *testing.T) {
 			require.NoError(t, err)
 
 			// Setup destination registry
-			dstPort, err := freeport.GetFreePort()
-			require.NoError(t, err)
-			dstRegistryURL := testutil.SetupInMemoryRegistry(ctx, t, dstPort)
-			dstRegistryRef := registry.Reference{
-				Registry:   dstRegistryURL,
-				Repository: "my-namespace",
-			}
+			dstRegistryRef := createRegistry(t, ctx)
 
 			// This gets the test package digest from the first package publish
 			localRepo := &remote.Repository{PlainHTTP: true}
@@ -295,21 +289,8 @@ func TestPublishCopyTag(t *testing.T) {
 			err := Publish(ctx, tc.packageToPublish, registryRef, tc.opts)
 			require.NoError(t, err)
 
-			port2, err := freeport.GetFreePort()
-			require.NoError(t, err)
-			dstRegistryURL := testutil.SetupInMemoryRegistry(ctx, t, port2)
-			dstRegistryRef := registry.Reference{
-				Registry:   dstRegistryURL,
-				Repository: "my-namespace",
-			}
+			dstRegistryRef := createRegistry(t, ctx)
 
-			// // This gets the Image index digest for the package publish
-			// localRepo := &remote.Repository{PlainHTTP: true}
-			// ociSrc := fmt.Sprintf("%s/%s", registryRef.String(), "test:0.0.1")
-			// localRepo.Reference, err = registry.ParseReference(ociSrc)
-			// require.NoError(t, err)
-			// indexDesc, err := oras.Resolve(ctx, localRepo, ociSrc, oras.ResolveOptions{})
-			// require.NoError(t, err)
 			src := fmt.Sprintf("oci://%s/%s", registryRef.String(), "test:0.0.1")
 
 			// Publish test package
