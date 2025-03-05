@@ -22,6 +22,7 @@ import (
 	"github.com/zarf-dev/zarf/src/pkg/zoci"
 	"github.com/zarf-dev/zarf/src/test/testutil"
 	"oras.land/oras-go/v2"
+	"oras.land/oras-go/v2/errdef"
 	"oras.land/oras-go/v2/registry"
 	"oras.land/oras-go/v2/registry/remote"
 )
@@ -112,7 +113,7 @@ func TestPublishOCI(t *testing.T) {
 		src       registry.Reference
 		dst       registry.Reference
 		opts      PublishOCIOpts
-		expecterr error
+		expectErr error
 	}{
 		// TODO: finish me
 		{
@@ -123,7 +124,7 @@ func TestPublishOCI(t *testing.T) {
 			},
 			dst:       registry.Reference{},
 			opts:      PublishOCIOpts{},
-			expecterr: errors.New("hello"),
+			expectErr: errdef.ErrInvalidReference,
 		},
 		// TODO: finish me
 		{
@@ -134,7 +135,7 @@ func TestPublishOCI(t *testing.T) {
 			},
 			dst:       registry.Reference{},
 			opts:      PublishOCIOpts{},
-			expecterr: errors.New("hello"),
+			expectErr: errdef.ErrInvalidReference,
 		},
 		{
 			name: "errors if src's repo name is not the same as dst's",
@@ -147,14 +148,14 @@ func TestPublishOCI(t *testing.T) {
 				Repository: "my-other-namespace",
 			},
 			opts:      PublishOCIOpts{},
-			expecterr: errors.New("hello"),
+			expectErr: errors.New("source and destination repositories must have the same name"),
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			err := PublishOCI(ctx, tc.src, tc.dst, tc.opts)
-			require.ErrorContains(t, err, tc.expecterr.Error())
+			require.ErrorContains(t, err, tc.expectErr.Error())
 		})
 	}
 }
