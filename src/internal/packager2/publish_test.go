@@ -98,6 +98,67 @@ func TestPublishError(t *testing.T) {
 	}
 }
 
+func TestPublishOCI(t *testing.T) {
+	// t.Parallel()
+	ctx := context.Background()
+	lint.ZarfSchema = testutil.LoadSchema(t, "../../../zarf.schema.json")
+
+	registryURL := testutil.SetupInMemoryRegistry(ctx, t, 5000)
+
+	// TODO: setup src and dst as different registries
+
+	tt := []struct {
+		name      string
+		src       registry.Reference
+		dst       registry.Reference
+		opts      PublishOCIOpts
+		expecterr error
+	}{
+		// TODO: finish me
+		{
+			name: "errors if src is not a valid ref",
+			src: registry.Reference{
+				Registry:   registryURL,
+				Repository: "my-namespace",
+			},
+			dst:       registry.Reference{},
+			opts:      PublishOCIOpts{},
+			expecterr: errors.New("hello"),
+		},
+		// TODO: finish me
+		{
+			name: "errors if dst is not a valid ref",
+			src: registry.Reference{
+				Registry:   registryURL,
+				Repository: "my-namespace",
+			},
+			dst:       registry.Reference{},
+			opts:      PublishOCIOpts{},
+			expecterr: errors.New("hello"),
+		},
+		{
+			name: "errors if src's repo name is not the same as dst's",
+			src: registry.Reference{
+				Registry:   registryURL,
+				Repository: "my-namespace",
+			},
+			dst: registry.Reference{
+				Registry:   registryURL,
+				Repository: "my-other-namespace",
+			},
+			opts:      PublishOCIOpts{},
+			expecterr: errors.New("hello"),
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			err := PublishOCI(ctx, tc.src, tc.dst, tc.opts)
+			require.ErrorContains(t, err, tc.expecterr.Error())
+		})
+	}
+}
+
 func TestPublishSkeleton(t *testing.T) {
 	// t.Parallel()
 	lint.ZarfSchema = testutil.LoadSchema(t, "../../../zarf.schema.json")

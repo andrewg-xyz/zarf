@@ -44,8 +44,19 @@ func PublishOCI(ctx context.Context, src registry.Reference, dst registry.Refere
 	l := logger.From(ctx)
 	start := time.Now()
 
+	if err := src.Validate(); err != nil {
+		return err
+	}
+
+	if err := dst.Validate(); err != nil {
+		return err
+	}
+
 	// TODO validation
 	// error out if the names aren't equivalent between src and dst
+	if strings.Split(src.Repository, "/")[len(strings.Split(src.Repository, "/"))-1] != strings.Split(dst.Repository, "/")[len(strings.Split(dst.Repository, "/"))-1] {
+		return fmt.Errorf("source and destination repositories must have the same name")
+	}
 
 	// src has name of repo
 	// dst only has the namespace
