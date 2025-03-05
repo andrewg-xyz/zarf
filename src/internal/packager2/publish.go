@@ -52,9 +52,13 @@ func PublishOCI(ctx context.Context, src registry.Reference, dst registry.Refere
 		return err
 	}
 
-	// TODO validation
-	// error out if the names aren't equivalent between src and dst
-	if strings.Split(src.Repository, "/")[len(strings.Split(src.Repository, "/"))-1] != strings.Split(dst.Repository, "/")[len(strings.Split(dst.Repository, "/"))-1] {
+	srcParts := strings.Split(src.Repository, "/")
+	srcPackageName := srcParts[len(srcParts)-1]
+
+	dstParts := strings.Split(dst.Repository, "/")
+	dstPackageName := dstParts[len(dstParts)-1]
+
+	if srcPackageName != dstPackageName {
 		return fmt.Errorf("source and destination repositories must have the same name")
 	}
 

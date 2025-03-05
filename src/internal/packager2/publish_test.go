@@ -150,12 +150,31 @@ func TestPublishOCI(t *testing.T) {
 			opts:      PublishOCIOpts{},
 			expectErr: errors.New("source and destination repositories must have the same name"),
 		},
+		{
+			name: "succeed when names are the same",
+			src: registry.Reference{
+				Registry:   registryURL,
+				Repository: "my-namespace/zarf-package-my-package",
+				Reference: "0.0.1",
+			},
+			dst: registry.Reference{
+				Registry:   registryURL,
+				Repository: "my-namespace/zarf-package-my-package",
+				Reference: "0.0.1",
+			},
+			opts:      PublishOCIOpts{},
+			expectErr: nil,
+		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			err := PublishOCI(ctx, tc.src, tc.dst, tc.opts)
-			require.ErrorContains(t, err, tc.expectErr.Error())
+			if tc.expectErr != nil {
+				require.ErrorContains(t, err, tc.expectErr.Error())
+				return
+			}
+			require.NoError(t, err)
 		})
 	}
 }
