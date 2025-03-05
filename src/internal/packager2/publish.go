@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/defenseunicorns/pkg/helpers/v2"
 	"github.com/zarf-dev/zarf/src/config"
@@ -19,6 +20,39 @@ import (
 	// "github.com/zarf-dev/zarf/src/pkg/layout"
 	"oras.land/oras-go/v2/registry"
 )
+
+// PublishOCIOpts declares the parameters to publish a package.
+type PublishOCIOpts struct {
+	// Concurrency configures the zoci push concurrency if empty defaults to 3.
+	Concurrency int
+	// SigningKeyPath points to a signing key on the local disk.
+	SigningKeyPath string
+	// SigningKeyPassword holds a password to use the key at SigningKeyPath.
+	SigningKeyPassword string
+	// SkipSignatureValidation flags whether Publish should skip validating the signature.
+	SkipSignatureValidation bool
+	// WithPlainHTTP falls back to plain HTTP for the registry calls instead of TLS.
+	WithPlainHTTP bool
+	// PublicKeyPath validates the create time signage of a package.
+	PublicKeyPath string
+	// Architecture is the architecture we are publishing to
+	Architecture string
+}
+
+// TODO PublishOCI takes a source and dest ref and copies the package between them.
+func PublishOCI(ctx context.Context, src registry.Reference, dst registry.Reference, opts PublishOCIOpts) error {
+	l := logger.From(ctx)
+	start := time.Now()
+
+	// TODO validation
+	// error out if the names aren't equivalent between src and dst
+
+	// src has name of repo
+	// dst only has the namespace
+
+	l.Debug("publisher2.PublishOCI done", "duration", time.Since(start))
+	return nil
+}
 
 // PublishOpts declares the parameters to publish a package.
 type PublishOpts struct {
