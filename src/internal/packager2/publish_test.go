@@ -99,14 +99,10 @@ func TestPublishError(t *testing.T) {
 	}
 }
 
-func TestPublishOCI(t *testing.T) {
+func TestPublishOCIValidation(t *testing.T) {
 	// t.Parallel()
 	ctx := context.Background()
 	lint.ZarfSchema = testutil.LoadSchema(t, "../../../zarf.schema.json")
-
-	registryURL := testutil.SetupInMemoryRegistry(ctx, t, 5000)
-
-	// TODO: setup src and dst as different registries
 
 	tt := []struct {
 		name      string
@@ -115,22 +111,20 @@ func TestPublishOCI(t *testing.T) {
 		opts      PublishOCIOpts
 		expectErr error
 	}{
-		// TODO: finish me
 		{
 			name: "errors if src is not a valid ref",
 			src: registry.Reference{
-				Registry:   registryURL,
+				Registry:   "example.com",
 				Repository: "my-namespace",
 			},
 			dst:       registry.Reference{},
 			opts:      PublishOCIOpts{},
 			expectErr: errdef.ErrInvalidReference,
 		},
-		// TODO: finish me
 		{
 			name: "errors if dst is not a valid ref",
 			src: registry.Reference{
-				Registry:   registryURL,
+				Registry:   "example.com",
 				Repository: "my-namespace",
 			},
 			dst:       registry.Reference{},
@@ -140,11 +134,11 @@ func TestPublishOCI(t *testing.T) {
 		{
 			name: "errors if src's repo name is not the same as dst's",
 			src: registry.Reference{
-				Registry:   registryURL,
+				Registry:   "example.com",
 				Repository: "my-namespace",
 			},
 			dst: registry.Reference{
-				Registry:   registryURL,
+				Registry:   "example.com",
 				Repository: "my-other-namespace",
 			},
 			opts:      PublishOCIOpts{},
@@ -153,12 +147,12 @@ func TestPublishOCI(t *testing.T) {
 		{
 			name: "succeed when names are the same",
 			src: registry.Reference{
-				Registry:   registryURL,
+				Registry:   "cool-example.com",
 				Repository: "my-namespace/zarf-package-my-package",
 				Reference: "0.0.1",
 			},
 			dst: registry.Reference{
-				Registry:   registryURL,
+				Registry:   "other-example.com",
 				Repository: "my-namespace/zarf-package-my-package",
 				Reference: "0.0.1",
 			},
