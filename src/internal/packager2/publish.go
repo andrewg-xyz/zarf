@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/defenseunicorns/pkg/helpers/v2"
 	"github.com/zarf-dev/zarf/src/config"
 	"github.com/zarf-dev/zarf/src/pkg/logger"
 	"github.com/zarf-dev/zarf/src/pkg/zoci"
@@ -21,8 +20,8 @@ import (
 	"oras.land/oras-go/v2/registry"
 )
 
-// PublishOCIOpts declares the parameters to publish a package.
-type PublishOCIOpts struct {
+// PublishFromOCIOpts declares the parameters to publish a package.
+type PublishFromOCIOpts struct {
 	// Concurrency configures the zoci push concurrency if empty defaults to 3.
 	Concurrency int
 	// SigningKeyPath points to a signing key on the local disk.
@@ -39,8 +38,8 @@ type PublishOCIOpts struct {
 	Architecture string
 }
 
-// TODO PublishOCI takes a source and dest ref and copies the package between them.
-func PublishOCI(ctx context.Context, src registry.Reference, dst registry.Reference, opts PublishOCIOpts) error {
+// TODO PublishFromOCI takes a source and dest ref and copies the package between them.
+func PublishFromOCI(ctx context.Context, src registry.Reference, dst registry.Reference, opts PublishFromOCIOpts) error {
 	l := logger.From(ctx)
 	start := time.Now()
 
@@ -62,15 +61,31 @@ func PublishOCI(ctx context.Context, src registry.Reference, dst registry.Refere
 		return fmt.Errorf("source and destination repositories must have the same name")
 	}
 
-	// src has name of repo
-	// dst only has the namespace
+	arch := config.GetArch(opts.Architecture)
+	p := oci.PlatformForArch(arch)
+
+	// Set up remote repo client
+	srcRemote, err := zoci.NewRemote(ctx, src.String(), p, oci.WithPlainHTTP(opts.WithPlainHTTP))
+	if err != nil {
+		return fmt.Errorf("could not instantiate remote: %w", err)
+	}
+	dstRemote, err := zoci.NewRemote(ctx, dst.String(), p, oci.WithPlainHTTP(opts.WithPlainHTTP))
+	if err != nil {
+		return fmt.Errorf("could not instantiate remote: %w", err)
+	}
+
+	// Execute copy
+	err = zoci.CopyPackage(ctx, srcRemote, dstRemote, opts.Concurrency)
+	if err != nil {
+		return fmt.Errorf("could not copy package: %w", err)
+	}
 
 	l.Debug("publisher2.PublishOCI done", "duration", time.Since(start))
 	return nil
 }
 
-// PublishOpts declares the parameters to publish a package.
-type PublishOpts struct {
+// PublishPackageOpts declares the parameters to publish a package.
+type PublishPackageOpts struct {
 	// Concurrency configures the zoci push concurrency if empty defaults to 3.
 	Concurrency int
 	// SigningKeyPath points to a signing key on the local disk.
@@ -87,9 +102,9 @@ type PublishOpts struct {
 	Architecture string
 }
 
-// Publish takes a Path to the location of the build package, a ref to a registry, and a PublishOpts and uploads the
+// PublishPackage takes a Path to the location of the build package, a ref to a registry, and a PublishOpts and uploads the
 // package tarball, oci reference, or skeleton package to the registry.
-func Publish(ctx context.Context, path string, dst registry.Reference, opts PublishOpts) error {
+func PublishPackage(ctx context.Context, path string, dst registry.Reference, opts PublishPackageOpts) error {
 	l := logger.From(ctx)
 	// TODO: determine if the source is an OCI reference and a zoci.CopyPackage() is required
 	// TODO: can you copy to and from the same registry?
@@ -101,44 +116,6 @@ func Publish(ctx context.Context, path string, dst registry.Reference, opts Publ
 	}
 	if path == "" {
 		return fmt.Errorf("path must be specified")
-	}
-
-	// If path is remote copy oci to oci
-	if helpers.IsOCIURL(path) {
-
-		// Build srcRef
-		trimmed := strings.TrimPrefix(path, "oci://")
-		srcRef, err := registry.ParseReference(trimmed)
-		if err != nil {
-			return fmt.Errorf("failed to parse path, path=%s: %w", path, err)
-		}
-
-		// Extract packageName from src and build dstUrl for dst remote
-		parts := strings.Split(srcRef.String(), "/")
-		packageName := parts[len(parts)-1]
-		dstUrl := dst.String() + "/" + packageName
-
-		// Build platform
-		arch := config.GetArch(opts.Architecture)
-		p := oci.PlatformForArch(arch)
-
-		// Set up remote repo client
-		src, err := zoci.NewRemote(ctx, srcRef.String(), p, oci.WithPlainHTTP(opts.WithPlainHTTP))
-		if err != nil {
-			return fmt.Errorf("could not instantiate remote: %w", err)
-		}
-		dstRem, err := zoci.NewRemote(ctx, dstUrl, p, oci.WithPlainHTTP(opts.WithPlainHTTP))
-		if err != nil {
-			return fmt.Errorf("could not instantiate remote: %w", err)
-		}
-
-		// Execute copy
-		err = zoci.CopyPackage(ctx, src, dstRem, opts.Concurrency)
-		if err != nil {
-			return fmt.Errorf("could not copy package: %w", err)
-		}
-
-		return nil
 	}
 
 	// Load package layout

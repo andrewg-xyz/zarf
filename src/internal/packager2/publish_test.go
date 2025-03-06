@@ -71,19 +71,19 @@ func TestPublishError(t *testing.T) {
 		name      string
 		path      string
 		ref       registry.Reference
-		opts      PublishOpts
+		opts      PublishPackageOpts
 		expectErr error
 	}{
 		{
 			name:      "Test empty publish opts",
-			opts:      PublishOpts{},
+			opts:      PublishPackageOpts{},
 			expectErr: errors.New("invalid registry"),
 		},
 		{
 			name:      "Test empty path",
 			path:      "",
 			ref:       defaultRef,
-			opts:      PublishOpts{},
+			opts:      PublishPackageOpts{},
 			expectErr: errors.New("path must be specified"),
 		},
 	}
@@ -92,13 +92,13 @@ func TestPublishError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// TODO Make parallel
 			// t.Parallel()
-			err := Publish(context.Background(), tc.path, tc.ref, tc.opts)
+			err := PublishPackage(context.Background(), tc.path, tc.ref, tc.opts)
 			require.ErrorContains(t, err, tc.expectErr.Error())
 		})
 	}
 }
 
-func TestPublishOCIValidation(t *testing.T) {
+func TestPublishFromOCIValidation(t *testing.T) {
 	// t.Parallel()
 	ctx := context.Background()
 	lint.ZarfSchema = testutil.LoadSchema(t, "../../../zarf.schema.json")
@@ -107,7 +107,7 @@ func TestPublishOCIValidation(t *testing.T) {
 		name      string
 		src       registry.Reference
 		dst       registry.Reference
-		opts      PublishOCIOpts
+		opts      PublishFromOCIOpts
 		expectErr error
 	}{
 		{
@@ -117,7 +117,7 @@ func TestPublishOCIValidation(t *testing.T) {
 				Repository: "my-namespace",
 			},
 			dst:       registry.Reference{},
-			opts:      PublishOCIOpts{},
+			opts:      PublishFromOCIOpts{},
 			expectErr: errdef.ErrInvalidReference,
 		},
 		{
@@ -127,7 +127,7 @@ func TestPublishOCIValidation(t *testing.T) {
 				Repository: "my-namespace",
 			},
 			dst:       registry.Reference{},
-			opts:      PublishOCIOpts{},
+			opts:      PublishFromOCIOpts{},
 			expectErr: errdef.ErrInvalidReference,
 		},
 		{
@@ -140,29 +140,14 @@ func TestPublishOCIValidation(t *testing.T) {
 				Registry:   "example.com",
 				Repository: "my-other-namespace",
 			},
-			opts:      PublishOCIOpts{},
+			opts:      PublishFromOCIOpts{},
 			expectErr: errors.New("source and destination repositories must have the same name"),
-		},
-		{
-			name: "succeed when names are the same",
-			src: registry.Reference{
-				Registry:   "cool-example.com",
-				Repository: "my-namespace/zarf-package-my-package",
-				Reference:  "0.0.1",
-			},
-			dst: registry.Reference{
-				Registry:   "other-example.com",
-				Repository: "my-namespace/zarf-package-my-package",
-				Reference:  "0.0.1",
-			},
-			opts:      PublishOCIOpts{},
-			expectErr: nil,
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			err := PublishOCI(ctx, tc.src, tc.dst, tc.opts)
+			err := PublishFromOCI(ctx, tc.src, tc.dst, tc.opts)
 			if tc.expectErr != nil {
 				require.ErrorContains(t, err, tc.expectErr.Error())
 				return
@@ -235,12 +220,12 @@ func TestPublishPackage(t *testing.T) {
 	tt := []struct {
 		name string
 		path string
-		opts PublishOpts
+		opts PublishPackageOpts
 	}{
 		{
 			name: "Publish package",
 			path: "testdata/zarf-package-test-amd64-0.0.1.tar.zst",
-			opts: PublishOpts{
+			opts: PublishPackageOpts{
 				WithPlainHTTP: true,
 			},
 		},
@@ -253,7 +238,7 @@ func TestPublishPackage(t *testing.T) {
 			registryRef := createRegistry(t, ctx)
 
 			// Publish test package
-			err := Publish(ctx, tc.path, registryRef, tc.opts)
+			err := PublishPackage(ctx, tc.path, registryRef, tc.opts)
 			require.NoError(t, err)
 
 			// We want to pull the package and sure the content is the same as the local package
@@ -277,12 +262,12 @@ func TestPublishCopySHA(t *testing.T) {
 	tt := []struct {
 		name             string
 		packageToPublish string
-		opts             PublishOpts
+		opts             PublishPackageOpts
 	}{
 		{
 			name:             "Publish package",
 			packageToPublish: "testdata/zarf-package-test-amd64-0.0.1.tar.zst",
-			opts: PublishOpts{
+			opts: PublishPackageOpts{
 				WithPlainHTTP: true,
 				Architecture:  "amd64",
 				Concurrency:   3,
@@ -297,7 +282,7 @@ func TestPublishCopySHA(t *testing.T) {
 			registryRef := createRegistry(t, ctx)
 
 			// Publish test package
-			err := Publish(ctx, tc.packageToPublish, registryRef, tc.opts)
+			err := PublishPackage(ctx, tc.packageToPublish, registryRef, tc.opts)
 			require.NoError(t, err)
 
 			// Setup destination registry
@@ -319,29 +304,29 @@ func TestPublishCopySHA(t *testing.T) {
 			require.NoError(t, err)
 
 			// TODO: test case for sha on the src but not on dst
-			opts := PublishOCIOpts{
-				WithPlainHTTP: true,
-				Architecture:  "amd64",
-				Concurrency:   3,
+			opts := PublishFromOCIOpts{
+				WithPlainHTTP: tc.opts.WithPlainHTTP,
+				Architecture:  tc.opts.Architecture,
+				Concurrency:   tc.opts.Concurrency,
 			}
 
 			// Publish test package to the destination registry
-			err = PublishOCI(ctx, srcRef, dstRef, opts)
+			err = PublishFromOCI(ctx, srcRef, dstRef, opts)
 			require.NoError(t, err)
 
-			// // We want to pull the package and sure the content is the same as the local package
-			// layoutExpected, err := layout2.LoadFromTar(ctx, tc.packageToPublish, layout2.PackageLayoutOptions{})
-			// require.NoError(t, err)
-			// // Publish creates a local oci manifest file using the package name, delete this to clean up test name
-			// defer os.Remove(layoutExpected.Pkg.Metadata.Name)
-			// // Format url and instantiate remote
-			// packageRef, err := zoci.ReferenceFromMetadata(dstRegistryRef.String(), &layoutExpected.Pkg.Metadata, &layoutExpected.Pkg.Build)
-			// require.NoError(t, err)
+			// We want to pull the package and sure the content is the same as the local package
+			layoutExpected, err := layout2.LoadFromTar(ctx, tc.packageToPublish, layout2.PackageLayoutOptions{})
+			require.NoError(t, err)
+			// Publish creates a local oci manifest file using the package name, delete this to clean up test name
+			defer os.Remove(layoutExpected.Pkg.Metadata.Name)
+			// Format url and instantiate remote
+			packageRef, err := zoci.ReferenceFromMetadata(dstRegistryRef.String(), &layoutExpected.Pkg.Metadata, &layoutExpected.Pkg.Build)
+			require.NoError(t, err)
 
-			// pkgRefsha := fmt.Sprintf("%s@%s", packageRef, indexDesc.Digest)
+			pkgRefsha := fmt.Sprintf("%s@%s", packageRef, indexDesc.Digest)
 
-			// layoutActual := pullFromRemote(t, ctx, pkgRefsha, "amd64")
-			// require.Equal(t, layoutExpected.Pkg, layoutActual.Pkg, "Uploaded package is not identical to downloaded package")
+			layoutActual := pullFromRemote(t, ctx, pkgRefsha, "amd64")
+			require.Equal(t, layoutExpected.Pkg, layoutActual.Pkg, "Uploaded package is not identical to downloaded package")
 		})
 	}
 }
@@ -353,12 +338,12 @@ func TestPublishCopyTag(t *testing.T) {
 	tt := []struct {
 		name             string
 		packageToPublish string
-		opts             PublishOpts
+		opts             PublishPackageOpts
 	}{
 		{
 			name:             "Publish package",
 			packageToPublish: "testdata/zarf-package-test-amd64-0.0.1.tar.zst",
-			opts: PublishOpts{
+			opts: PublishPackageOpts{
 				WithPlainHTTP: true,
 				Architecture:  "amd64",
 				Concurrency:   3,
@@ -373,15 +358,26 @@ func TestPublishCopyTag(t *testing.T) {
 			registryRef := createRegistry(t, ctx)
 
 			// Publish test package
-			err := Publish(ctx, tc.packageToPublish, registryRef, tc.opts)
+			err := PublishPackage(ctx, tc.packageToPublish, registryRef, tc.opts)
 			require.NoError(t, err)
 
 			dstRegistryRef := createRegistry(t, ctx)
 
-			src := fmt.Sprintf("oci://%s/%s", registryRef.String(), "test:0.0.1")
+			src := fmt.Sprintf("%s/%s", registryRef.String(), "test:0.0.1")
+			srcRegistry, err := registry.ParseReference(src)
+			require.NoError(t, err)
+			dst := fmt.Sprintf("%s/%s", dstRegistryRef.String(), "test:0.0.1")
+			dstRegistry, err := registry.ParseReference(dst)
+			require.NoError(t, err)
+
+			opts := PublishFromOCIOpts{
+				WithPlainHTTP: tc.opts.WithPlainHTTP,
+				Architecture:  tc.opts.Architecture,
+				Concurrency:   tc.opts.Concurrency,
+			}
 
 			// Publish test package
-			err = Publish(ctx, src, dstRegistryRef, tc.opts)
+			err = PublishFromOCI(ctx, srcRegistry, dstRegistry, opts)
 			require.NoError(t, err)
 
 			// We want to pull the package and sure the content is the same as the local package
