@@ -165,7 +165,7 @@ func CreatePackage(ctx context.Context, packagePath string, opt CreateOptions) (
 
 	l.Info("composed components successfully")
 
-	if !opt.SkipSBOM {
+	if !opt.SkipSBOM && pkg.IsSBOMAble() {
 		l.Info("generating SBOM")
 		err = generateSBOM(ctx, pkg, buildPath, sbomImageList)
 		if err != nil {
@@ -381,8 +381,14 @@ func assemblePackageComponent(ctx context.Context, component v1alpha1.ZarfCompon
 					return fmt.Errorf(lang.ErrFileExtract, file.ExtractPath, file.Source, err.Error())
 				}
 			} else {
-				if err := helpers.CreatePathAndCopy(filepath.Join(packagePath, file.Source), dst); err != nil {
-					return fmt.Errorf("unable to copy file %s: %w", file.Source, err)
+				if filepath.IsAbs(file.Source) {
+					if err := helpers.CreatePathAndCopy(file.Source, dst); err != nil {
+						return fmt.Errorf("unable to copy file %s: %w", file.Source, err)
+					}
+				} else {
+					if err := helpers.CreatePathAndCopy(filepath.Join(packagePath, file.Source), dst); err != nil {
+						return fmt.Errorf("unable to copy file %s: %w", file.Source, err)
+					}
 				}
 			}
 		}

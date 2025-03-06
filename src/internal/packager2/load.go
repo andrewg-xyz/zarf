@@ -53,12 +53,12 @@ func LoadPackage(ctx context.Context, opt LoadOptions) (*layout.PackageLayout, e
 	isPartial := false
 	switch srcType {
 	case "oci":
-		isPartial, err = pullOCI(ctx, opt.Source, tarPath, opt.Shasum, architecture, opt.Filter)
+		isPartial, tarPath, err = pullOCI(ctx, opt.Source, tmpDir, opt.Shasum, architecture, opt.Filter)
 		if err != nil {
 			return nil, err
 		}
 	case "http", "https":
-		err = pullHTTP(ctx, opt.Source, tarPath, opt.Shasum)
+		tarPath, err = pullHTTP(ctx, opt.Source, tmpDir, opt.Shasum)
 		if err != nil {
 			return nil, err
 		}

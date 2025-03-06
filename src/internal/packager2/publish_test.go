@@ -34,8 +34,7 @@ func pullFromRemote(t *testing.T, ctx context.Context, packageRef string, archit
 
 	// Generate tmpdir and pull published package from local registry
 	tmpdir := t.TempDir()
-	tarPath := fmt.Sprintf("%s/%s", tmpdir, "data.tar.zst")
-	_, err := pullOCI(context.Background(), packageRef, tarPath, "", architecture, filters.Empty(), oci.WithPlainHTTP(true))
+	_, tarPath, err := pullOCI(context.Background(), packageRef, tmpdir, "", architecture, filters.Empty(), oci.WithPlainHTTP(true))
 	require.NoError(t, err)
 
 	layoutActual, err := layout2.LoadFromTar(ctx, tarPath, layout2.PackageLayoutOptions{})
@@ -149,12 +148,12 @@ func TestPublishOCIValidation(t *testing.T) {
 			src: registry.Reference{
 				Registry:   "cool-example.com",
 				Repository: "my-namespace/zarf-package-my-package",
-				Reference: "0.0.1",
+				Reference:  "0.0.1",
 			},
 			dst: registry.Reference{
 				Registry:   "other-example.com",
 				Repository: "my-namespace/zarf-package-my-package",
-				Reference: "0.0.1",
+				Reference:  "0.0.1",
 			},
 			opts:      PublishOCIOpts{},
 			expectErr: nil,
